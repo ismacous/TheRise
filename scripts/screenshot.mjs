@@ -61,6 +61,30 @@ await page.evaluate(() => window.game.openSheet('village'));
 await page.waitForTimeout(600);
 await page.screenshot({ path: `${outDir}/04-village.png` });
 
+// Trade needs a post and an unlocked route to show anything useful.
+await page.evaluate(() => {
+  const { game: g } = window.theRise;
+  const w = g.world;
+  w.research.completed.add('r_marketplace');
+  w.research.completed.add('r_trade_post');
+  w.modifiers.tradeTier = 2;
+  w.treasury = 900;
+  w.addToStock('planks', 120);
+  w.addToStock('bread', 60);
+  w.refreshStockCache();
+  for (let r = 4; r < 40; r++) {
+    for (let a = 0; a < 32; a++) {
+      const ang = (a / 32) * Math.PI * 2;
+      const x = Math.round(w.startX + Math.cos(ang) * r);
+      const y = Math.round(w.startY + Math.sin(ang) * r);
+      if (w.canPlace('trade_post', x, y).ok && w.place('trade_post', x, y, 0, true)) return;
+    }
+  }
+});
+await page.evaluate(() => window.game.openSheet('trade'));
+await page.waitForTimeout(700);
+await page.screenshot({ path: `${outDir}/07-trade.png` });
+
 await page.evaluate(() => {
   window.game.closeSheet();
   const w = window.game.world;

@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [ ! -d node_modules ]; then npm ci --no-audit --no-fund >/dev/null 2>&1 || npm install --no-audit --no-fund >/dev/null 2>&1; fi; echo 'The Rise: dépendances prêtes. npm test pour la simulation, npm run dev pour jouer.'"
+          }
+        ]
+      }
+    ]
+  }
+}

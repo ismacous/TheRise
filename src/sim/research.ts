@@ -6,7 +6,9 @@ import type { World } from './world';
 /** Research points produced per second by the whole village. */
 export function researchRate(world: World): number {
   const adults = world.stats.adults;
-  let rate = 0.012 * adults * (0.35 + world.stats.happiness / 100);
+  // A small flat trickle keeps a ten-person hamlet moving; the population term
+  // is what makes a city research quickly.
+  let rate = 0.05 + 0.018 * adults * (0.35 + world.stats.happiness / 100);
 
   for (const b of world.buildingList) {
     if (b.state !== 'active' || !b.enabled) continue;
