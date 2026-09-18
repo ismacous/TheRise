@@ -29,6 +29,7 @@ export interface SaveData {
   treasury: number;
   comfortPool: number;
   eventCooldown: number;
+  objectives: string[];
   research: {
     points: number;
     completed: ResearchId[];
@@ -83,6 +84,7 @@ export function serialize(sim: Simulation, gen: Partial<WorldGenOptions>): SaveD
     treasury: w.treasury,
     comfortPool: w.comfortPool,
     eventCooldown: w.eventCooldown,
+    objectives: [...w.completedObjectives],
     research: {
       points: w.research.points,
       completed: [...w.research.completed],
@@ -179,6 +181,7 @@ export function deserialize(data: SaveData): Simulation {
   w.treasury = data.treasury;
   w.comfortPool = data.comfortPool ?? 0;
   w.eventCooldown = data.eventCooldown ?? 200;
+  w.completedObjectives = new Set(data.objectives ?? []);
   w.research.points = data.research.points;
   w.research.completed = new Set(data.research.completed);
   w.research.active = data.research.active;

@@ -225,11 +225,7 @@ export class Game implements GameApi {
     this.selectedVillagerId = id;
     if (id !== null) {
       this.selectedBuildingId = null;
-      const v = this.world.villagerById.get(id);
-      if (v) {
-        const prof = v.profession;
-        this.world.notify(`${v.name} ${v.surname} — ${prof}`, '👤', 'neutral');
-      }
+      this.openSheet('villager');
     }
     this.requestUiRefresh();
   }

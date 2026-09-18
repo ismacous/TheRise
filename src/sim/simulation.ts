@@ -13,6 +13,7 @@ import {
   updatePopulation,
   updateVillagerNeeds,
 } from './population';
+import { updateObjectives } from './objectives';
 import { updateResearch } from './research';
 import { NUTRITION_PER_DAY, createVillager } from './villagers';
 import { DAYS_PER_SEASON, DAY_SECONDS, World } from './world';
@@ -96,6 +97,7 @@ export class Simulation {
       this.statsTimer = 0.5;
       w.refreshStockCache();
       computeStats(w);
+      updateObjectives(w);
       const tier = computeTier(w);
       if (tier !== w.stats.tier) {
         w.stats.tier = tier;
@@ -201,7 +203,7 @@ export function createNewGame(opts: NewGameOptions = {}): Simulation {
   for (const node of [...w.nodes.values()]) {
     if (node.kind !== 'tree') continue;
     const d2 = (node.x - sx) ** 2 + (node.y - sy) ** 2;
-    if (d2 > 90) continue;
+    if (d2 > 42) continue;
     salvagedLogs++;
     w.killNode(node.id);
   }

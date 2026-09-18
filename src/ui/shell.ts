@@ -6,6 +6,7 @@ import { SEASON_LABEL, type Notification } from '../sim/types';
 import { clear, el, onTap, setText } from './dom';
 import type { GameApi, SheetId } from './api';
 import { renderSheet, sheetTitle } from './panels';
+import { activeObjectives } from '../sim/objectives';
 
 const WEATHER_ICON: Record<string, string> = {
   clear: '☀️',
@@ -71,6 +72,7 @@ export class UiShell {
   private sheetHead!: HTMLElement;
   private sheetBody!: HTMLElement;
   private buildBanner!: HTMLElement;
+  private objectiveChip!: HTMLElement;
   private debug!: HTMLElement;
 
   private resChips = new Map<GoodId, { node: HTMLElement; value: HTMLElement }>();
@@ -154,6 +156,9 @@ export class UiShell {
 
     this.toasts = el('div', { class: 'toasts' });
     this.eventsStrip = el('div', { class: 'events-strip' });
+    this.objectiveChip = el('div', { class: 'objective-chip' });
+    this.objectiveChip.style.display = 'none';
+    onTap(this.objectiveChip, () => this.api.openSheet('village'));
     this.buildBanner = el('div', { class: 'build-banner' });
     this.buildBanner.style.display = 'none';
     this.debug = el('div', { class: 'debug' });
@@ -162,6 +167,7 @@ export class UiShell {
     this.root.append(
       hudTop,
       this.toasts,
+      this.objectiveChip,
       this.eventsStrip,
       this.buildBanner,
       this.dock,
@@ -185,6 +191,7 @@ export class UiShell {
     this.updateResources();
     this.updateDock();
     this.updateEvents();
+    this.updateObjective();
     this.updateBanner();
     this.updateDebug(frameMs, fps);
     if (this.sheetDirty) {
@@ -296,6 +303,34 @@ export class UiShell {
         ]),
       );
     }
+  }
+
+  private updateObjective(): void {
+    const [next] = activeObjectives(this.api.world);
+    if (!next || this.api.placementId) {
+      this.objectiveChip.style.display = 'none';
+      return;
+    }
+    const [done, target] = next.progress(this.api.world);
+    const key = `${next.id}:${Math.min(done, target)}/${target}`;
+    if (this.objectiveChip.dataset.v !== key) {
+      this.objectiveChip.dataset.v = key;
+      clear(this.objectiveChip);
+      const fill = el('div', { class: 'objective-fill' });
+      fill.style.width = `${Math.min(100, (done / target) * 100)}%`;
+      this.objectiveChip.append(
+        el('span', { class: 'ic', text: next.icon }),
+        el('div', { class: 'objective-body' }, [
+          el('div', { class: 'objective-title', text: next.title }),
+          el('div', { class: 'objective-bar' }, [fill]),
+        ]),
+        el('span', {
+          class: 'objective-count',
+          text: target > 1 ? `${Math.min(done, target)}/${target}` : '',
+        }),
+      );
+    }
+    this.objectiveChip.style.display = 'flex';
   }
 
   private updateBanner(): void {

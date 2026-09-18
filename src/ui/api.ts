@@ -4,7 +4,15 @@ import type { World } from '../sim/world';
 
 export type QualityLevel = 'low' | 'medium' | 'high';
 
-export type SheetId = 'build' | 'research' | 'trade' | 'people' | 'village' | 'building' | 'settings';
+export type SheetId =
+  | 'build'
+  | 'research'
+  | 'trade'
+  | 'people'
+  | 'village'
+  | 'building'
+  | 'villager'
+  | 'settings';
 
 /** Everything the UI is allowed to do to the running game. */
 export interface GameApi {

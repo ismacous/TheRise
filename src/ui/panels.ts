@@ -19,6 +19,7 @@ import {
   sellPrice,
   TIER_NAMES,
 } from '../sim/economy';
+import { activeObjectives, OBJECTIVES } from '../sim/objectives';
 import { activeRecipe, recipeOptions, setRecipe } from '../sim/recipes';
 import { availableResearch, canStartResearch, cancelResearch, researchRate, startResearch } from '../sim/research';
 import { fullName } from '../sim/villagers';
@@ -53,6 +54,12 @@ export function sheetTitle(id: SheetId, api: GameApi): { title: string; sub?: st
       const b = api.selectedBuildingId ? w.buildings.get(api.selectedBuildingId) : null;
       return b ? { title: BUILDINGS[b.def].name } : { title: 'Bâtiment' };
     }
+    case 'villager': {
+      const v = api.selectedVillagerId ? w.villagerById.get(api.selectedVillagerId) : null;
+      return v
+        ? { title: fullName(v), sub: `${PROFESSIONS[v.profession]?.name ?? ''} · ${Math.floor(v.age)} ans` }
+        : { title: 'Villageois' };
+    }
   }
 }
 
@@ -70,6 +77,8 @@ export function renderSheet(id: SheetId, api: GameApi, body: HTMLElement, refres
       return renderVillage(api, body, refresh);
     case 'building':
       return renderBuilding(api, body, refresh);
+    case 'villager':
+      return renderVillager(api, body, refresh);
     case 'settings':
       return renderSettings(api, body, refresh);
   }
@@ -679,6 +688,44 @@ function renderVillage(api: GameApi, body: HTMLElement, refresh: Refresh): void 
   }
   body.append(kpis);
 
+  // Guided objectives: always something to aim at.
+  const objectives = activeObjectives(w);
+  if (objectives.length > 0) {
+    body.append(
+      el('div', { class: 'section-title', text: `Objectifs (${w.completedObjectives.size}/${OBJECTIVES.length})` }),
+    );
+    for (const o of objectives) {
+      const [done, target] = o.progress(w);
+      const reward = [
+        o.reward.research ? `📜 ${o.reward.research}` : null,
+        o.reward.gold ? `🪙 ${o.reward.gold}` : null,
+      ]
+        .filter(Boolean)
+        .join('  ');
+      body.append(
+        el('div', { class: 'objective-card' }, [
+          el('div', { class: 'card-title' }, [
+            el('span', { class: 'ic', text: o.icon }),
+            el('span', { text: o.title }),
+            el('span', { class: 'qty', style: 'margin-left:auto', text: reward }),
+          ]),
+          el('div', { class: 'card-desc', text: o.hint }),
+          bar(done / target, 'green'),
+          target > 1
+            ? el('div', { class: 'qty', text: `${Math.min(done, target)} / ${target}` })
+            : null,
+        ]),
+      );
+    }
+  } else {
+    body.append(
+      el('div', {
+        class: 'empty-note',
+        text: 'Tous les objectifs sont accomplis. La vallée est à vous.',
+      }),
+    );
+  }
+
   // Problems worth the player's attention, ranked.
   const issues = collectIssues(api);
   body.append(el('div', { class: 'section-title', text: 'À surveiller' }));
@@ -1072,6 +1119,124 @@ function goodChip(good: GoodId, amount: string): HTMLElement {
     dot,
     el('span', { text: `${GOODS[good].short} ${amount}` }),
   ]);
+}
+
+// ── Selected villager ──────────────────────────────────────────────────────
+
+const STATE_LABEL: Record<string, string> = {
+  idle: 'Attend des ordres',
+  walking: 'En chemin',
+  working: 'Au travail',
+  hauling: 'Transporte une charge',
+  eating: 'Mange',
+  sleeping: 'Dort',
+  relaxing: 'Se promène',
+  fleeing: 'Fuit',
+};
+
+const TASK_LABEL: Record<string, string> = {
+  none: '—',
+  harvest: 'Récolte',
+  produce: 'Production',
+  haul: 'Livraison',
+  build: 'Chantier',
+  eat: 'Cherche à manger',
+  sleep: 'Rentre se coucher',
+  wander: 'Flâne',
+  douse: "Combat l'incendie",
+};
+
+function renderVillager(api: GameApi, body: HTMLElement, refresh: Refresh): void {
+  const w = api.world;
+  const v = api.selectedVillagerId ? w.villagerById.get(api.selectedVillagerId) : null;
+  if (!v) {
+    body.append(el('div', { class: 'empty-note', text: 'Ce villageois n’est plus parmi nous.' }));
+    return;
+  }
+  const prof = PROFESSIONS[v.profession] ?? PROFESSIONS.idle;
+
+  const avatar = el('div', { class: 'avatar big', text: prof.icon });
+  avatar.style.background = prof.tunic;
+  body.append(
+    el('div', { class: 'detail-head' }, [
+      avatar,
+      el('div', {}, [
+        el('div', { class: 'card-title', text: fullName(v) }),
+        el('div', {
+          class: 'card-desc',
+          text: `${v.female ? 'Femme' : 'Homme'} · ${Math.floor(v.age)} ans · ${prof.name}`,
+        }),
+      ]),
+    ]),
+  );
+
+  body.append(el('div', { class: 'section-title', text: 'En ce moment' }));
+  body.append(
+    el('div', { class: 'card-desc', text: `${STATE_LABEL[v.state] ?? v.state} — ${TASK_LABEL[v.task.kind] ?? v.task.kind}` }),
+  );
+  if (v.carrying) {
+    body.append(el('div', { class: 'inv-row' }, [goodChip(v.carrying, String(v.carryAmount))]));
+  }
+
+  const needs: Array<[string, number, string]> = [
+    ['Satiété', v.satiety, ''],
+    ['Bonheur', v.happiness, 'green'],
+    ['Énergie', v.energy, 'blue'],
+    ['Santé', v.health, v.health < 50 ? 'red' : 'green'],
+  ];
+  body.append(el('div', { class: 'section-title', text: 'Besoins' }));
+  for (const [label, value, cls] of needs) {
+    body.append(
+      el('div', { class: 'offer-row' }, [
+        el('span', { class: 'grow' }, [
+          el('div', { text: label }),
+          bar(value / 100, cls),
+        ]),
+        el('span', { class: 'qty', text: `${Math.round(value)}%` }),
+      ]),
+    );
+  }
+  if (v.sick > 0) body.append(el('div', { class: 'empty-note', text: '🤒 Alité, convalescence en cours.' }));
+  if (v.pregnant > 0) {
+    body.append(
+      el('div', { class: 'empty-note', text: `🤰 Enceinte — naissance dans ${v.pregnant.toFixed(1)} jours.` }),
+    );
+  }
+
+  const work = v.workId ? w.buildings.get(v.workId) : null;
+  const home = v.homeId ? w.buildings.get(v.homeId) : null;
+  body.append(el('div', { class: 'section-title', text: 'Attaches' }));
+  for (const [label, b] of [
+    ['Travail', work],
+    ['Foyer', home],
+  ] as Array<[string, Building | null | undefined]>) {
+    const row = el('div', { class: 'offer-row' }, [
+      el('span', { text: b ? iconFor(b.def) : '—' }),
+      el('span', { class: 'grow' }, [
+        el('div', { text: label }),
+        el('div', { class: 'qty', text: b ? BUILDINGS[b.def].name : 'Aucun' }),
+      ]),
+    ]);
+    if (b) {
+      const btn = el('button', { class: 'mini-btn', text: 'Voir' });
+      onTap(btn, () => {
+        api.selectBuilding(b.id);
+        api.focusOn(b.cx, b.cy, 20);
+      });
+      row.append(btn);
+    }
+    body.append(row);
+  }
+
+  const follow = el('button', { class: 'btn primary', text: '🎯 Centrer la caméra' });
+  onTap(follow, () => api.focusOn(v.x, v.y, 14));
+  const close = el('button', { class: 'btn', text: 'Désélectionner' });
+  onTap(close, () => {
+    api.selectVillager(null);
+    api.closeSheet();
+  });
+  body.append(el('div', { class: 'btn-row' }, [follow, close]));
+  void refresh;
 }
 
 // ── Settings ───────────────────────────────────────────────────────────────

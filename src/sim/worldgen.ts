@@ -413,7 +413,7 @@ function findStartLocation(map: TileMap, rng: Rng): { x: number; y: number } {
       open * 2.2 +
       Math.min(trees, 60) * 0.9 +
       Math.min(water, 22) * 1.5 -
-      coreForest * 1.8 -
+      coreForest * 1.15 -
       Math.abs(water - 16) * 0.25;
     if (score > best.score) best = { x, y, score };
   }

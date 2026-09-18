@@ -86,6 +86,8 @@ export class World {
   activeEvents: ActiveEvent[] = [];
   notifications: Notification[] = [];
   eventCooldown = 200;
+  /** Ids of guided objectives the player has already ticked off. */
+  completedObjectives = new Set<string>();
 
   /** Runtime state of every trade partner (stock, demand, relationship). */
   partners = new Map<string, PartnerRuntime>();
