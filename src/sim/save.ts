@@ -182,6 +182,11 @@ export function deserialize(data: SaveData): Simulation {
       task: { ...raw.task },
       happinessTarget: raw.happinessTarget ?? raw.happiness,
       taskCooldown: 0,
+      stuckTimer: 0,
+      bestDist: Infinity,
+      prevX: raw.x,
+      prevY: raw.y,
+      prevAngle: raw.angle,
     };
     w.villagers.push(v);
     w.villagerById.set(v.id, v);

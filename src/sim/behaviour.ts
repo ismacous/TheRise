@@ -4,6 +4,8 @@ import { GOODS, type GoodId } from '../data/goods';
 import {
   SATIETY_PER_NUTRITION,
   buildingSpace,
+  dropCarried,
+  isStuck,
   carryCapacity,
   clearTask,
   depositIntoBuilding,
@@ -32,6 +34,12 @@ export function updateVillager(world: World, v: Villager, dt: number): void {
   if (v.taskCooldown > 0) v.taskCooldown -= dt;
   if (v.profession === 'child') {
     updateChild(world, v, dt);
+    return;
+  }
+
+  // A destination that cannot be reached must never hold a villager hostage.
+  if (isStuck(v) && v.task.kind !== 'none' && v.task.kind !== 'wander') {
+    abandonTask(world, v);
     return;
   }
 
@@ -73,6 +81,24 @@ export function updateVillager(world: World, v: Villager, dt: number): void {
     default:
       pickTask(world, v);
   }
+}
+
+/**
+ * Drops whatever the villager was doing when the destination turns out to be
+ * unreachable, returning any carried load to the stores and flagging the
+ * building so the player can see why it stopped.
+ */
+function abandonTask(world: World, v: Villager): void {
+  const target = v.task.toId ?? v.task.targetId ?? v.task.fromId;
+  if (target !== undefined && target > 0) {
+    const b = world.buildings.get(target);
+    if (b) b.stall = 'Accès bloqué';
+  }
+  dropCarried(world, v);
+  releaseNode(world, v);
+  releaseJob(world, v);
+  clearTask(v);
+  v.taskCooldown = 1.5;
 }
 
 function updateChild(world: World, v: Villager, dt: number): void {
@@ -620,6 +646,8 @@ function doSleep(world: World, v: Villager, dt: number): void {
       // Tuck villagers inside so streets empty out at night.
       v.x = home.cx;
       v.y = home.cy;
+      v.prevX = v.x;
+      v.prevY = v.y;
     }
     return;
   }

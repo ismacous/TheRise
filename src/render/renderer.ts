@@ -171,7 +171,7 @@ export class GameRenderer {
 
   private lastSeason = '';
 
-  update(dt: number): void {
+  update(dt: number, alpha = 1): void {
     const t0 = performance.now();
     this.elapsed += dt;
     const w = this.world;
@@ -197,7 +197,7 @@ export class GameRenderer {
 
     this.buildings.sync(w);
     this.buildings.update(w, dt, this.nightFactor());
-    this.villagers.update(w, this.elapsed);
+    this.villagers.update(w, this.elapsed, alpha);
     this.fauna.update(w, this.elapsed);
     this.water.update(this.elapsed);
     this.water.setSunColor(this.sun.color);

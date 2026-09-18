@@ -147,8 +147,10 @@ export class CameraController {
     const forwardZ = -Math.cos(this.yaw);
     const rightX = Math.cos(this.yaw);
     const rightZ = -Math.sin(this.yaw);
+    // Both axes follow the finger: the world is dragged, not the camera. The
+    // vertical sign is positive because screen Y grows downward.
     const dx = -dxPixels * worldPerPixel;
-    const dy = -dyPixels * worldPerPixel;
+    const dy = dyPixels * worldPerPixel;
     this.desiredTarget.x += rightX * dx + forwardX * dy;
     this.desiredTarget.z += rightZ * dx + forwardZ * dy;
     this.velocity.set(rightX * dx + forwardX * dy, 0, rightZ * dx + forwardZ * dy).multiplyScalar(6);

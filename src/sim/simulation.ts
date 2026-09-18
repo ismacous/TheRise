@@ -39,6 +39,8 @@ export class Simulation {
 
   /** Diagnostics. */
   ticksThisFrame = 0;
+  /** 0..1 through the tick currently being displayed; drives interpolation. */
+  alpha = 0;
 
   constructor(genOpts: Partial<WorldGenOptions> = {}) {
     this.world = new World(genOpts);
@@ -57,6 +59,7 @@ export class Simulation {
       this.ticksThisFrame++;
     }
     if (guard >= MAX_CATCHUP_TICKS) this.accumulator = 0;
+    this.alpha = Math.min(1, this.accumulator / TICK);
   }
 
   tick(dt: number): void {
@@ -87,6 +90,9 @@ export class Simulation {
     }
 
     for (const v of w.villagers) {
+      v.prevX = v.x;
+      v.prevY = v.y;
+      v.prevAngle = v.angle;
       updateVillagerNeeds(w, v, dt);
       updateVillager(w, v, dt);
     }

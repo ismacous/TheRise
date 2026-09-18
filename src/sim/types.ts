@@ -161,6 +161,14 @@ export interface Villager {
   workId: number;
   x: number;
   y: number;
+  /**
+   * Position at the start of the current tick. The simulation runs at 10 Hz
+   * and the screen at 60, so the renderer interpolates between the two to
+   * avoid the stepping that made villagers look like they teleported.
+   */
+  prevX: number;
+  prevY: number;
+  prevAngle: number;
   /** Facing angle in radians. */
   angle: number;
   state: VillagerState;
@@ -170,6 +178,10 @@ export interface Villager {
   pathCooldown: number;
   /** Back-off before an idle villager rescans the job board. */
   taskCooldown: number;
+  /** Seconds spent failing to get closer to the current destination. */
+  stuckTimer: number;
+  /** Closest this villager has been to its destination since setting it. */
+  bestDist: number;
   targetX: number;
   targetY: number;
   carrying: GoodId | null;

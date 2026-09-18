@@ -57,14 +57,22 @@ export class VillagerRenderer {
     return mesh;
   }
 
-  update(world: World, time: number): void {
+  update(world: World, time: number, alpha: number): void {
     const villagers = world.villagers;
     const n = Math.min(villagers.length, MAX_VILLAGERS);
     let loadCount = 0;
 
     for (let i = 0; i < n; i++) {
       const v = villagers[i];
-      const ground = world.map.sampleElevation(v.x, v.y) * HEIGHT_SCALE;
+      // Interpolate between the last two simulation ticks so movement reads as
+      // smooth at 60 fps even though the world only steps ten times a second.
+      const x = v.prevX + (v.x - v.prevX) * alpha;
+      const y = v.prevY + (v.y - v.prevY) * alpha;
+      let dAngle = v.angle - v.prevAngle;
+      while (dAngle > Math.PI) dAngle -= Math.PI * 2;
+      while (dAngle < -Math.PI) dAngle += Math.PI * 2;
+      const angle = v.prevAngle + dAngle * alpha;
+      const ground = world.map.sampleElevation(x, y) * HEIGHT_SCALE;
       const scale = (v.profession === 'child' ? 0.62 : 1) * v.bodyScale;
 
       const moving = v.state === 'walking' || v.state === 'hauling';
@@ -76,8 +84,8 @@ export class VillagerRenderer {
       const swing = working ? Math.sin(time * 6 + v.phase) * 0.22 : moving ? Math.sin(time * 9 + v.phase) * 0.07 : 0;
 
       const d = this.dummy;
-      d.position.set(v.x, ground + gait + breathe, v.y);
-      d.rotation.set(swing * 0.35, -v.angle + Math.PI / 2, 0);
+      d.position.set(x, ground + gait + breathe, y);
+      d.rotation.set(swing * 0.35, -angle + Math.PI / 2, 0);
       d.scale.setScalar(scale);
       if (v.state === 'sleeping') {
         d.scale.set(scale, scale * 0.25, scale);
@@ -100,7 +108,7 @@ export class VillagerRenderer {
 
       if (v.carrying) {
         d.position.y += 0.62 * scale;
-        d.rotation.set(0, -v.angle + Math.PI / 2, 0);
+        d.rotation.set(0, -angle + Math.PI / 2, 0);
         d.scale.setScalar(scale);
         d.updateMatrix();
         this.load.setMatrixAt(loadCount, d.matrix);

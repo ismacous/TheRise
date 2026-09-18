@@ -8,8 +8,9 @@ import { gatherYieldFor, workSpeedFor } from './modifiers';
 import { TERRAIN, type Building, type ResourceNode, type Villager } from './types';
 import { DAY_SECONDS, type World } from './world';
 
-export const ADULT_AGE = 14;
-export const OLD_AGE = 62;
+/** A child becomes a worker after four days — about forty minutes of play. */
+export const ADULT_AGE = 4;
+export const OLD_AGE = 26;
 /** Tiles per second on flat grass, unburdened. */
 export const BASE_SPEED = 2.6;
 
@@ -43,6 +44,9 @@ export function createVillager(world: World, x: number, y: number, age: number, 
     workId: 0,
     x,
     y,
+    prevX: x,
+    prevY: y,
+    prevAngle: 0,
     angle: rng.range(0, Math.PI * 2),
     state: 'idle',
     task: { kind: 'none' },
@@ -50,6 +54,8 @@ export function createVillager(world: World, x: number, y: number, age: number, 
     pathIndex: 0,
     pathCooldown: 0,
     taskCooldown: 0,
+    stuckTimer: 0,
+    bestDist: Infinity,
     targetX: x,
     targetY: y,
     carrying: null,
@@ -102,6 +108,8 @@ export function moveTowards(
   const distSq = dx * dx + dy * dy;
   if (distSq <= arrive * arrive) {
     v.path = null;
+    v.stuckTimer = 0;
+    v.bestDist = Infinity;
     return true;
   }
 
@@ -111,6 +119,19 @@ export function moveTowards(
     v.path = null;
     v.targetX = tx;
     v.targetY = ty;
+    v.stuckTimer = 0;
+    v.bestDist = Infinity;
+  }
+
+  // Progress watchdog. A building walled in by its neighbours used to trap its
+  // carriers forever, and one stuck carrier holding a load is one worker the
+  // village never gets back.
+  const dist = Math.sqrt(distSq);
+  if (dist < v.bestDist - 0.3) {
+    v.bestDist = dist;
+    v.stuckTimer = 0;
+  } else {
+    v.stuckTimer += dt;
   }
 
   // Short clear hops do not deserve a full A* search.
@@ -337,6 +358,38 @@ export function clearTask(v: Villager): void {
   v.task = { kind: 'none' };
   v.work = 0;
   v.path = null;
+  v.stuckTimer = 0;
+  v.bestDist = Infinity;
+}
+
+/**
+ * Returns whatever a villager is carrying to the stores. Any code path that
+ * cancels a task must call this, or the load rides around on someone who is no
+ * longer doing the job and is lost to the village.
+ */
+export function dropCarried(world: World, v: Villager): void {
+  if (!v.carrying) return;
+  const leftover = world.addToStock(v.carrying, v.carryAmount, v.x, v.y);
+  if (leftover > 0 && v.workId) {
+    const work = world.buildings.get(v.workId);
+    if (work) {
+      const cap = BUILDINGS[work.def].storage?.capacity ?? 0;
+      let used = 0;
+      for (const amount of Object.values(work.inv)) used += amount as number;
+      const room = Math.max(0, cap - used);
+      const put = Math.min(room, leftover);
+      if (put > 0) work.inv[v.carrying] = (work.inv[v.carrying] ?? 0) + put;
+    }
+  }
+  v.carrying = null;
+  v.carryAmount = 0;
+}
+
+/** Seconds of no progress after which a destination is treated as unreachable. */
+export const STUCK_LIMIT = 12;
+
+export function isStuck(v: Villager): boolean {
+  return v.stuckTimer > STUCK_LIMIT;
 }
 
 export function releaseNode(world: World, v: Villager): void {
@@ -346,17 +399,19 @@ export function releaseNode(world: World, v: Villager): void {
   }
 }
 
-/** Satiety points a villager burns per game day. */
-export const SATIETY_PER_DAY = 40;
+/**
+ * Satiety burned per real second. Deliberately independent of the day length:
+ * hunger is balanced against production rates, which are also per second, so
+ * making days longer changes the light and the seasons without quietly making
+ * food six times more plentiful.
+ */
+export const SATIETY_PER_SECOND = 0.26;
 /** Satiety restored per unit of nutrition eaten. */
 export const SATIETY_PER_NUTRITION = 22;
-/**
- * Nutrition one villager needs per day. A loaf of bread (3 nutrition) therefore
- * feeds someone for about a day and a half.
- */
-export const NUTRITION_PER_DAY = SATIETY_PER_DAY / SATIETY_PER_NUTRITION;
+/** Nutrition one villager needs per in-game day, derived for display. */
+export const NUTRITION_PER_DAY = (SATIETY_PER_SECOND * DAY_SECONDS) / SATIETY_PER_NUTRITION;
 
 export function satietyDecayPerSecond(world: World): number {
   const winter = world.time.season === 'winter' ? 1.25 : 1;
-  return (SATIETY_PER_DAY / DAY_SECONDS) * winter * world.modifiers.foodUpkeep * world.foodUpkeepEvent;
+  return SATIETY_PER_SECOND * winter * world.modifiers.foodUpkeep * world.foodUpkeepEvent;
 }

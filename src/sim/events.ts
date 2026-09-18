@@ -6,30 +6,35 @@ import type { World } from './world';
 
 // ── Weather ────────────────────────────────────────────────────────────────
 
+/**
+ * Each season has its own sky. Spring is showery, summer is long and dry,
+ * autumn turns grey, winter brings snow. The player should be able to tell the
+ * season from the weather alone.
+ */
 const SEASON_WEATHER: Record<string, Array<[WeatherKind, number]>> = {
   spring: [
-    ['clear', 0.5],
-    ['rain', 0.33],
-    ['fog', 0.1],
-    ['storm', 0.07],
+    ['clear', 0.56],
+    ['rain', 0.28],
+    ['fog', 0.11],
+    ['storm', 0.05],
   ],
   summer: [
-    ['clear', 0.72],
-    ['rain', 0.16],
-    ['storm', 0.09],
-    ['fog', 0.03],
+    ['clear', 0.84],
+    ['rain', 0.09],
+    ['storm', 0.05],
+    ['fog', 0.02],
   ],
   autumn: [
-    ['clear', 0.42],
-    ['rain', 0.34],
-    ['fog', 0.15],
-    ['storm', 0.09],
+    ['clear', 0.46],
+    ['rain', 0.31],
+    ['fog', 0.16],
+    ['storm', 0.07],
   ],
   winter: [
-    ['clear', 0.42],
-    ['snow', 0.38],
-    ['fog', 0.13],
-    ['storm', 0.07],
+    ['clear', 0.52],
+    ['snow', 0.33],
+    ['fog', 0.11],
+    ['storm', 0.04],
   ],
 };
 
@@ -57,7 +62,9 @@ export function updateWeather(world: World, dt: number): void {
         world.notify('La neige recouvre les toits', '❄️', 'neutral');
       }
     }
-    world.weatherTimer = world.rng.range(60, 190);
+    // Weather holds for a good while: a sky that flips every minute reads as
+    // noise rather than as a season.
+    world.weatherTimer = world.rng.range(170, 420);
   }
   const wet = world.weather === 'rain' ? 1 : world.weather === 'storm' ? 0.85 : world.weather === 'snow' ? 0.4 : 0;
   world.wetness += (wet - world.wetness) * Math.min(1, dt * 0.35);
@@ -185,11 +192,12 @@ export function updateVillageEvents(world: World, dt: number): void {
     world.eventCooldown = 60;
     return;
   }
-  world.eventCooldown = world.rng.range(150, 380);
+  world.eventCooldown = world.rng.range(420, 900);
 
   const roll = world.rng.next();
-  if (roll < 0.2) startDisease(world);
-  else if (roll < 0.42) startBlessing(world);
+  // Disease and fire should be memorable, not routine.
+  if (roll < 0.12) startDisease(world);
+  else if (roll < 0.3) startBlessing(world);
   else if (roll < 0.58) startBumperCrop(world);
   else if (roll < 0.74) startWanderingFamily(world);
   else if (roll < 0.88) startMerchantVisit(world);

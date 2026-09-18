@@ -227,7 +227,9 @@ export class MeshBuilder {
       const sin = Math.sin(ry);
       const wx = cx + px * cos - pz * sin;
       const wz = cz + px * sin + pz * cos;
-      this.box(wx, py, wz, w, thickness, len, slopeColor, ry, -sign * slope, 0);
+      // The sign puts the ridge up and the eaves down. Inverted, it builds a
+      // valley instead of a roof.
+      this.box(wx, py, wz, w, thickness, len, slopeColor, ry, sign * slope, 0);
     }
     return this;
   }

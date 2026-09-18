@@ -32,13 +32,33 @@ export function hasTradePost(world: World): boolean {
   return world.buildingList.some((b) => b.def === 'trade_post' && b.state === 'active');
 }
 
+/**
+ * Food gets dearer as the cold closes in and cheap again after the harvest.
+ * It applies to both directions, so a well-stocked granary turns winter into
+ * a trading opportunity instead of a pure loss.
+ */
+export function seasonalPriceFactor(world: World, good: GoodId): number {
+  if (GOODS[good].nutrition <= 0) return 1;
+  switch (world.time.season) {
+    case 'winter':
+      return 1.45;
+    case 'autumn':
+      return 0.85;
+    case 'spring':
+      return 1.15;
+    default:
+      return 1;
+  }
+}
+
 /** Price the partner charges you per unit when buying from them. */
 export function buyPrice(world: World, p: TradePartnerDef, good: GoodId): number {
   const offer = p.sells.find((o) => o.good === good);
   if (!offer) return Infinity;
   const rt = world.partners.get(p.id)!;
   const relationDiscount = 1 - (rt.relation / 100) * 0.12;
-  return Math.max(1, Math.round(GOODS[good].value * offer.priceMul * relationDiscount * 10) / 10);
+  const season = seasonalPriceFactor(world, good);
+  return Math.max(1, Math.round(GOODS[good].value * offer.priceMul * relationDiscount * season * 10) / 10);
 }
 
 /** Price the partner pays you per unit when selling to them. */
@@ -49,7 +69,11 @@ export function sellPrice(world: World, p: TradePartnerDef, good: GoodId): numbe
   const relationBonus = 1 + (rt.relation / 100) * 0.18;
   // Reputation of the village itself nudges prices up as it grows.
   const prestige = 1 + (world.stats.tier - 1) * 0.045;
-  return Math.max(1, Math.round(GOODS[good].value * offer.priceMul * relationBonus * prestige * 10) / 10);
+  const season = seasonalPriceFactor(world, good);
+  return Math.max(
+    1,
+    Math.round(GOODS[good].value * offer.priceMul * relationBonus * prestige * season * 10) / 10,
+  );
 }
 
 export interface TradeResult {

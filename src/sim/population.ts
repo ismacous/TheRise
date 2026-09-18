@@ -6,6 +6,7 @@ import {
   OLD_AGE,
   canWork,
   createVillager,
+  dropCarried,
   fullName,
   happinessTarget,
   satietyDecayPerSecond,
@@ -66,6 +67,7 @@ export function updateEmployment(world: World): void {
       }
       v.workId = 0;
       v.profession = v.age < ADULT_AGE ? 'child' : 'idle';
+      dropCarried(world, v);
       v.task = { kind: 'none' };
     }
   }
@@ -121,6 +123,7 @@ export function updateEmployment(world: World): void {
       b.workers.push(v.id);
       v.workId = b.id;
       v.profession = def.profession;
+      dropCarried(world, v);
       v.task = { kind: 'none' };
       if (def.profession === 'carrier') carriers++;
     }
@@ -298,7 +301,7 @@ export function updatePopulation(world: World, dt: number): PopulationOutcome {
       // Roughly one child per mother every eight game days at high morale,
       // slowing sharply when there are no spare beds.
       const p = 0.0016 * dt * (v.happiness / 100) * (cap > pop + 2 ? 1 : 0.2);
-      if (world.rng.next() < p) v.pregnant = 2.5;
+      if (world.rng.next() < p) v.pregnant = 0.7;
     }
   }
 
@@ -316,6 +319,7 @@ export function removeVillager(world: World, v: Villager, cause: string): void {
     const i = work.workers.indexOf(v.id);
     if (i !== -1) work.workers.splice(i, 1);
   }
+  dropCarried(world, v);
   for (const j of world.haulJobs) if (j.claimedBy === v.id) j.claimedBy = 0;
   if (v.task.nodeId) {
     const n = world.nodes.get(v.task.nodeId);

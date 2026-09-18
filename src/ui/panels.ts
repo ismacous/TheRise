@@ -1083,15 +1083,6 @@ function renderBuilding(api: GameApi, body: HTMLElement, refresh: Refresh): void
     }
   }
 
-  if (b.state === 'active' && def.workers > 0) {
-    const toggle = el('button', { class: 'btn', text: b.enabled ? '⏸ Mettre en pause' : '▶️ Reprendre' });
-    onTap(toggle, () => {
-      b.enabled = !b.enabled;
-      refresh();
-    });
-    actions.append(toggle);
-  }
-
   const demolish = el('button', {
     class: 'btn danger',
     text: b.state === 'ruined' ? '🧹 Déblayer' : '🧨 Démolir',

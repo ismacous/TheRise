@@ -8,7 +8,7 @@ import type { World } from '../src/sim/world';
 
 const GEN = { seed: 'save-test' };
 
-function place(w: World, def: BuildingId, node?: string) {
+function place(w: World, def: BuildingId, node?: string, minNodes = 6) {
   for (let r = 3; r < 60; r++) {
     for (let a = 0; a < 48; a++) {
       const ang = (a / 48) * Math.PI * 2;
@@ -20,7 +20,7 @@ function place(w: World, def: BuildingId, node?: string) {
         w.nodeGrid.query(x, y, 12, (c) => {
           if (c.kind === node && c.alive) n++;
         });
-        if (n < 6) continue;
+        if (n < minNodes) continue;
       }
       const b = w.place(def, x, y, 0, true);
       if (b) return b;
@@ -33,7 +33,8 @@ function place(w: World, def: BuildingId, node?: string) {
 function playedGame() {
   const sim = createNewGame(GEN);
   const w = sim.world;
-  place(w, 'woodcutter_camp', 'tree');
+  // Enough standing timber that the camp cannot strip the wood bare mid-test.
+  place(w, 'woodcutter_camp', 'tree', 40);
   place(w, 'gatherer_hut', 'berry_bush');
   place(w, 'sawmill');
   place(w, 'shack');
@@ -97,12 +98,12 @@ describe('save and load', () => {
     const data = JSON.parse(JSON.stringify(serialize(sim, GEN)));
     const restoredSim = deserialize(data);
     const w = restoredSim.world;
-    const woodBefore = w.stockOf('logs') + w.stockOf('planks');
+    const foodBefore = w.totalFood();
     for (let i = 0; i < 3000; i++) restoredSim.tick(0.1);
     computeStats(w);
     expect(w.stats.population).toBeGreaterThan(0);
-    // Logs alone may fall as the sawmill eats them, so measure the chain.
-    expect(w.stockOf('logs') + w.stockOf('planks')).toBeGreaterThan(woodBefore);
+    // The berry hut is renewable, so food must keep coming in after a load.
+    expect(w.totalFood()).toBeGreaterThan(foodBefore);
     // Villagers must have picked their jobs back up rather than idling.
     const working = w.villagers.filter((v) => v.workId !== 0).length;
     expect(working).toBeGreaterThan(0);

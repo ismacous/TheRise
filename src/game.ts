@@ -355,7 +355,7 @@ export class Game implements GameApi {
     if (terrainChanged || this.world.terrainChanges.length > 0) {
       this.ui.minimap.markTerrainDirty();
     }
-    this.renderer.update(dt);
+    this.renderer.update(dt, this.sim.alpha);
     this.updateSelectionMarkers();
     this.updateGhost();
     this.renderer.render();

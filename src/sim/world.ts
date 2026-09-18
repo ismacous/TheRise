@@ -1,6 +1,6 @@
 import { Emitter } from '../core/emitter';
 import { Rng } from '../core/rng';
-import { clamp, clamp01 } from '../core/util';
+import { clamp, clamp01, smoothstep } from '../core/util';
 import { BUILDINGS, type BuildingId, type NodeKind } from '../data/buildings';
 import { GOODS, type GoodId } from '../data/goods';
 import { generateWorld, type WorldGenOptions } from './worldgen';
@@ -26,8 +26,13 @@ import {
   type WeatherKind,
 } from './types';
 
-export const DAY_SECONDS = 120;
-export const DAYS_PER_SEASON = 6;
+/** Twelve real minutes per in-game day at normal speed. */
+export const DAY_SECONDS = 720;
+export const DAYS_PER_SEASON = 3;
+
+/** Start and end of daylight, as a fraction of the day: 70 % day, 30 % night. */
+export const DAWN = 0.15;
+export const DUSK = 0.85;
 
 export interface WorldEvents {
   notify: Notification;
@@ -253,6 +258,9 @@ export class World {
     }
     if (def.category === 'farming' && this.averageFertility(x, y, w, h) < 0.25) {
       return { ok: false, reason: 'Terre trop pauvre' };
+    }
+    if (!this.hasAccess(x, y, w, h)) {
+      return { ok: false, reason: 'Aucun accès : laissez un passage' };
     }
     return { ok: true, reason: '' };
   }
@@ -686,7 +694,31 @@ export class World {
       }
     }
     if (best) return { x: best[0] + 0.5, y: best[1] + 0.5 };
+    // Ringed in by other buildings: widen the search rather than returning the
+    // building's own centre, which is never walkable and left carriers
+    // walking into a wall forever.
+    for (let r = 2; r <= 6; r++) {
+      for (let j = -r; j <= r; j++) {
+        for (let i = -r; i <= r; i++) {
+          if (Math.abs(i) !== r && Math.abs(j) !== r) continue;
+          const x = Math.round(b.cx) + i;
+          const y = Math.round(b.cy) + j;
+          if (this.map.walkable(x, y)) return { x: x + 0.5, y: y + 0.5 };
+        }
+      }
+    }
     return { x: b.cx, y: b.cy };
+  }
+
+  /** True when at least one walkable tile touches the footprint. */
+  hasAccess(x: number, y: number, w: number, h: number): boolean {
+    for (let i = x - 1; i <= x + w; i++) {
+      if (this.map.walkable(i, y - 1) || this.map.walkable(i, y + h)) return true;
+    }
+    for (let j = y - 1; j <= y + h; j++) {
+      if (this.map.walkable(x - 1, j) || this.map.walkable(x + w, j)) return true;
+    }
+    return false;
   }
 
   seasonIndex(): number {
@@ -707,11 +739,20 @@ export class World {
     return clamp(base * rain, 0.1, 2);
   }
 
-  /** Daylight 0..1 used by the renderer and by work efficiency at night. */
+  /**
+   * Daylight 0..1. Seventy per cent of the day is lit, with a soft ramp at each
+   * end, and the summer sun rises earlier and sets later than the winter one.
+   */
   daylight(): number {
     const f = this.time.dayFraction;
-    // Sunrise ~0.22, sunset ~0.85.
-    return clamp01(Math.sin((f - 0.16) * Math.PI / 0.74) * 1.15);
+    const shift =
+      this.time.season === 'summer' ? 0.05 : this.time.season === 'winter' ? -0.05 : 0;
+    const dawn = DAWN - shift;
+    const dusk = DUSK + shift;
+    const ramp = 0.07;
+    const rising = clamp01((f - (dawn - ramp)) / (ramp * 2));
+    const falling = clamp01((dusk + ramp - f) / (ramp * 2));
+    return smoothstep(Math.min(rising, falling));
   }
 
   /**

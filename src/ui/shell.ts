@@ -49,6 +49,9 @@ const PRIMARY_GOODS: GoodId[] = [
   'jewellery',
 ];
 
+/** Sheets whose contents change while they are open. */
+const LIVE_SHEETS = new Set<SheetId>(['research', 'trade', 'building', 'village', 'people', 'villager']);
+
 const DOCK: Array<{ id: SheetId; icon: string; label: string }> = [
   { id: 'build', icon: '🔨', label: 'Bâtir' },
   { id: 'research', icon: '📜', label: 'Savoir' },
@@ -82,6 +85,7 @@ export class UiShell {
   private seenNotifications = 0;
   private refreshTimer = 0;
   private sheetDirty = true;
+  private liveTimer = 0;
 
   constructor(root: HTMLElement, api: GameApi) {
     this.root = root;
@@ -199,6 +203,14 @@ export class UiShell {
     this.updateObjective();
     this.updateBanner();
     this.updateDebug(frameMs, fps);
+
+    // Panels that show running values — research timers, caravan ETAs, stocks —
+    // redraw on their own so the player never has to close and reopen them.
+    this.liveTimer -= dt;
+    if (this.liveTimer <= 0) {
+      this.liveTimer = 0.5;
+      if (this.api.openSheetId && LIVE_SHEETS.has(this.api.openSheetId)) this.sheetDirty = true;
+    }
     if (this.sheetDirty) {
       this.sheetDirty = false;
       this.renderSheetContents();
@@ -420,6 +432,7 @@ export class UiShell {
 
   private renderSheetContents(id: SheetId | null = this.api.openSheetId): void {
     if (!id) return;
+    const scroll = this.sheetBody.scrollTop;
     clear(this.sheetHead);
     const { title, sub } = sheetTitle(id, this.api);
     const close = el('button', { class: 'sheet-close', text: '✕', 'aria-label': 'Fermer' });
@@ -433,6 +446,7 @@ export class UiShell {
     );
     clear(this.sheetBody);
     renderSheet(id, this.api, this.sheetBody, () => this.markSheetDirty());
+    this.sheetBody.scrollTop = scroll;
   }
 
   get tierLabel(): string {
