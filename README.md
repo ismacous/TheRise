@@ -21,7 +21,7 @@ joué tranquillement.
 | Moteur | TypeScript + Three.js, aucun asset externe |
 | Enveloppe native | Capacitor |
 | Carte | 208 × 208 tuiles, relief, rivières, lac, forêts, gisements |
-| Contenu | 60 bâtiments · 38 ressources · 54 recherches · 7 partenaires commerciaux |
+| Contenu | 60 bâtiments · 34 ressources · 54 recherches · 35 métiers · 7 partenaires |
 | Rendu | Low poly facetté, cycle jour/nuit, 4 saisons, météo |
 
 Toute la direction artistique est **générée par le code** : chaque maison,

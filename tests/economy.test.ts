@@ -4,6 +4,7 @@ import { computeStats, createNewGame, type Simulation } from '../src/sim/simulat
 import { World } from '../src/sim/world';
 import { igniteBuilding } from '../src/sim/events';
 import { createVillager } from '../src/sim/villagers';
+import { createVillager } from '../src/sim/villagers';
 
 function run(sim: Simulation, seconds: number): void {
   const steps = Math.round(seconds / 0.1);
@@ -144,5 +145,46 @@ describe('fire', () => {
     run(sim, 600);
     // Losing one or two buildings is a setback; losing the village is a bug.
     expect(w.buildingList.length).toBeGreaterThan(before - 4);
+  });
+});
+
+describe('building integrity', () => {
+  it('keeps footprints on integer tiles', () => {
+    const sim = createNewGame({ seed: 'integrity' });
+    const w = sim.world;
+    placeNear(w, 'woodcutter_camp', 'tree', 10);
+    placeNear(w, 'sawmill');
+    placeNear(w, 'shack');
+    run(sim, 120);
+    for (const b of w.buildingList) {
+      // A fractional origin silently corrupts fertility, occupancy and
+      // rendering: it once stopped every pasture in the game from producing.
+      expect(Number.isInteger(b.x), `${b.def} x=${b.x}`).toBe(true);
+      expect(Number.isInteger(b.y), `${b.def} y=${b.y}`).toBe(true);
+      expect(b.cx).toBeCloseTo(b.x + b.w / 2, 6);
+      expect(b.cy).toBeCloseTo(b.y + b.h / 2, 6);
+      expect(w.averageFertility(b.x, b.y, b.w, b.h)).not.toBeNaN();
+    }
+  });
+});
+
+describe('textile chain', () => {
+  it('turns wool into cloth and clothes', () => {
+    const sim = createNewGame({ seed: 'textile' });
+    const w = sim.world;
+    for (const r of ['r_husbandry_fowl', 'r_husbandry_sheep', 'r_weaving', 'r_tailoring'] as const) {
+      w.research.completed.add(r);
+    }
+    w.treasury = 5000;
+    expect(placeNear(w, 'sheep_pasture')).toBeTruthy();
+    expect(placeNear(w, 'chicken_coop')).toBeTruthy();
+    expect(placeNear(w, 'weaver')).toBeTruthy();
+    expect(placeNear(w, 'tailor')).toBeTruthy();
+    for (let i = 0; i < 30; i++) createVillager(w, w.startX + 1, w.startY + 1, 25);
+    w.addToStock('wheat', 400);
+    w.refreshStockCache();
+    run(sim, 420);
+    expect(w.stockOf('wool')).toBeGreaterThan(0);
+    expect(w.stockOf('clothes')).toBeGreaterThan(0);
   });
 });

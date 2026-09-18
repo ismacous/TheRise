@@ -65,3 +65,8 @@ distant, donc la compilation Android ne se vérifie que via CI.
   d'extinction doit utiliser une marge, pas une égalité à zéro.
 - Retirer un nœud de `world.nodes` ne suffit pas : il faut aussi le retirer de
   `nodeGrid`, sinon les recherches tombent sur des arbres déjà abattus.
+- Ne mutez jamais un `Building` pour l'adapter à une structure de données. Un
+  `Object.assign(b, { x: b.cx, y: b.cy })` destiné à un index spatial a écrasé
+  l'origine de chaque bâtiment par son centre : coordonnées fractionnaires,
+  fertilité à `NaN`, et plus aucun pâturage ne produisait. Un test vérifie
+  désormais que les empreintes restent sur des cases entières.

@@ -59,7 +59,6 @@ export class World {
 
   buildings = new Map<number, Building>();
   buildingList: Building[] = [];
-  buildingGrid: SpatialGrid<Building & { x: number; y: number }>;
 
   villagers: Villager[] = [];
   villagerById = new Map<number, Villager>();
@@ -167,7 +166,6 @@ export class World {
     this.startY = gen.startY;
 
     this.nodeGrid = new SpatialGrid<ResourceNode>(this.map.width, this.map.height, 8);
-    this.buildingGrid = new SpatialGrid(this.map.width, this.map.height, 12);
 
     for (const n of gen.nodes) {
       this.nodes.set(n.id, n);
@@ -203,13 +201,6 @@ export class World {
         for (const n of map.values()) if (n.alive) yield n;
       })(this.nodes),
     );
-  }
-
-  rebuildBuildingGrid(): void {
-    this.buildingGrid.clear();
-    for (const b of this.buildingList) {
-      this.buildingGrid.insert(Object.assign(b, { x: b.cx, y: b.cy }) as never);
-    }
   }
 
   // ── notifications ────────────────────────────────────────────────────────
@@ -358,7 +349,6 @@ export class World {
     this.buildings.set(b.id, b);
     this.buildingList.push(b);
     this.layoutVersion++;
-    this.rebuildBuildingGrid();
     this.emitter.emit('buildingPlaced', b);
     if (b.state === 'active') this.emitter.emit('buildingCompleted', b);
     return b;
@@ -396,7 +386,6 @@ export class World {
     if (i !== -1) this.buildingList.splice(i, 1);
     this.haulJobs = this.haulJobs.filter((j) => j.fromId !== id && j.toId !== id);
     this.layoutVersion++;
-    this.rebuildBuildingGrid();
     this.emitter.emit('buildingDestroyed', b);
   }
 

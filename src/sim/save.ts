@@ -162,7 +162,6 @@ export function deserialize(data: SaveData): Simulation {
     w.buildings.set(b.id, b);
     w.buildingList.push(b);
   }
-  w.rebuildBuildingGrid();
   w.terrainChanges.length = 0;
 
   // ── Villagers ───────────────────────────────────────────────────────────
