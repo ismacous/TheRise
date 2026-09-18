@@ -1,0 +1,653 @@
+import { clamp } from '../core/util';
+import { BUILDINGS } from '../data/buildings';
+import { GOODS, type GoodId } from '../data/goods';
+import {
+  buildingSpace,
+  carryCapacity,
+  clearTask,
+  depositIntoBuilding,
+  extraYields,
+  findHarvestNode,
+  harvestStandPoint,
+  moveTowards,
+  releaseNode,
+  wanderTarget,
+  workRate,
+  yieldFromNode,
+} from './villagers';
+import { activeRecipe } from './recipes';
+import { TERRAIN, type Building, type Villager } from './types';
+import type { World } from './world';
+
+const NIGHT_START = 0.9;
+const NIGHT_END = 0.2;
+
+export function isNight(dayFraction: number): boolean {
+  return dayFraction > NIGHT_START || dayFraction < NIGHT_END;
+}
+
+/** One villager, one simulation step. */
+export function updateVillager(world: World, v: Villager, dt: number): void {
+  if (v.profession === 'child') {
+    updateChild(world, v, dt);
+    return;
+  }
+
+  // ── Survival overrides, in priority order ───────────────────────────────
+  if (v.task.kind !== 'eat' && v.satiety < 32) {
+    releaseNode(world, v);
+    clearTask(v);
+    v.task = { kind: 'eat', phase: 0 };
+  }
+  if (v.task.kind === 'none' && isNight(world.time.dayFraction) && v.energy < 55 && v.homeId) {
+    v.task = { kind: 'sleep', phase: 0 };
+  }
+
+  switch (v.task.kind) {
+    case 'eat':
+      doEat(world, v, dt);
+      return;
+    case 'sleep':
+      doSleep(world, v, dt);
+      return;
+    case 'douse':
+      doDouse(world, v, dt);
+      return;
+    case 'haul':
+      doHaul(world, v, dt);
+      return;
+    case 'build':
+      doBuild(world, v, dt);
+      return;
+    case 'harvest':
+      doHarvest(world, v, dt);
+      return;
+    case 'produce':
+      doProduce(world, v, dt);
+      return;
+    case 'wander':
+      doWander(world, v, dt);
+      return;
+    default:
+      pickTask(world, v);
+  }
+}
+
+function updateChild(world: World, v: Villager, dt: number): void {
+  v.state = 'relaxing';
+  if (v.task.kind !== 'wander') {
+    const t = wanderTarget(world, v, world.rng);
+    v.task = { kind: 'wander' };
+    v.targetX = t.x;
+    v.targetY = t.y;
+  }
+  if (moveTowards(world, v, dt, v.targetX, v.targetY, 0.6)) {
+    v.idleFor += dt;
+    if (v.idleFor > world.rng.range(2, 7)) {
+      v.idleFor = 0;
+      clearTask(v);
+    }
+  }
+}
+
+// ── Task selection ─────────────────────────────────────────────────────────
+
+function pickTask(world: World, v: Villager): void {
+  v.idleFor += 0.1;
+  const work = v.workId ? world.buildings.get(v.workId) : null;
+
+  if (work && work.state === 'active' && work.enabled) {
+    const def = BUILDINGS[work.def];
+    if (def.gather) {
+      v.task = { kind: 'harvest', targetId: work.id, phase: 0 };
+      return;
+    }
+    if (def.recipe || def.service || def.livestock || def.id === 'forester_hut') {
+      v.task = { kind: 'produce', targetId: work.id, phase: 0 };
+      return;
+    }
+  }
+
+  // Carriers, builders and the unemployed share the logistics backlog.
+  if (v.profession === 'carrier' || v.profession === 'builder' || v.profession === 'idle') {
+    const site = findConstructionSite(world, v);
+    if (site) {
+      v.task = { kind: 'build', targetId: site.id, phase: 0 };
+      return;
+    }
+    const job = claimHaulJob(world, v);
+    if (job) {
+      v.task = {
+        kind: 'haul',
+        fromId: job.fromId,
+        toId: job.toId,
+        good: job.good,
+        amount: job.amount,
+        phase: 0,
+      };
+      return;
+    }
+  }
+
+  if (v.idleFor > 1.5) {
+    const t = wanderTarget(world, v, world.rng);
+    v.task = { kind: 'wander' };
+    v.targetX = t.x;
+    v.targetY = t.y;
+    v.idleFor = 0;
+  } else {
+    v.state = 'idle';
+  }
+}
+
+function findConstructionSite(world: World, v: Villager): Building | null {
+  let best: Building | null = null;
+  let bestD = Infinity;
+  for (const b of world.buildingList) {
+    if (b.state !== 'planned' && b.state !== 'building') continue;
+    if (!hasAllMaterials(world, b)) continue;
+    const builders = countBuildersOn(world, b.id);
+    if (builders >= 4) continue;
+    const d = (b.cx - v.x) ** 2 + (b.cy - v.y) ** 2 + builders * 400;
+    if (d < bestD) {
+      bestD = d;
+      best = b;
+    }
+  }
+  return best;
+}
+
+function countBuildersOn(world: World, id: number): number {
+  let n = 0;
+  for (const v of world.villagers) if (v.task.kind === 'build' && v.task.targetId === id) n++;
+  return n;
+}
+
+export function hasAllMaterials(_world: World, b: Building): boolean {
+  const cost = BUILDINGS[b.def].cost;
+  for (const [g, need] of Object.entries(cost)) {
+    if ((b.delivered[g as GoodId] ?? 0) < (need as number)) return false;
+  }
+  return true;
+}
+
+function claimHaulJob(world: World, v: Villager) {
+  let best = null;
+  let bestScore = Infinity;
+  for (const job of world.haulJobs) {
+    if (job.claimedBy !== 0) continue;
+    const to = world.buildings.get(job.toId);
+    if (!to) continue;
+    const from = job.fromId === -1 ? world.findStoreWith(job.good, v.x, v.y) : world.buildings.get(job.fromId);
+    if (!from) continue;
+    const d = (from.cx - v.x) ** 2 + (from.cy - v.y) ** 2;
+    const score = d - job.priority * 900;
+    if (score < bestScore) {
+      bestScore = score;
+      best = { ...job, fromId: from.id };
+      best.claimedBy = v.id;
+      job.claimedBy = v.id;
+    }
+  }
+  if (best) {
+    // Only one job may stay claimed; release any others we grabbed while scanning.
+    for (const job of world.haulJobs) {
+      if (job.claimedBy === v.id && job.id !== best.id) job.claimedBy = 0;
+    }
+  }
+  return best;
+}
+
+// ── Task implementations ───────────────────────────────────────────────────
+
+function doHarvest(world: World, v: Villager, dt: number): void {
+  const b = world.buildings.get(v.task.targetId!);
+  if (!b || b.state !== 'active' || !b.enabled) {
+    releaseNode(world, v);
+    clearTask(v);
+    return;
+  }
+  const def = BUILDINGS[b.def];
+  const g = def.gather!;
+
+  if (v.task.phase === 0) {
+    // Choose a node and walk to it.
+    if (!v.task.nodeId) {
+      // Refuse to work when the camp is full or consumables are missing.
+      if (buildingSpace(world, b) < 6) {
+        b.stall = 'Stock plein';
+        v.task = { kind: 'haul', fromId: b.id, toId: -1, phase: 0, good: dominantGood(b) ?? undefined };
+        if (!v.task.good) {
+          clearTask(v);
+          v.state = 'idle';
+        }
+        return;
+      }
+      if (g.consumes) {
+        for (const [good, need] of Object.entries(g.consumes)) {
+          if ((b.inv[good as GoodId] ?? 0) < (need as number)) {
+            b.stall = `Manque ${GOODS[good as GoodId].name}`;
+            clearTask(v);
+            v.state = 'idle';
+            v.idleFor += dt;
+            return;
+          }
+        }
+      }
+      const node = findHarvestNode(world, b, v);
+      if (!node) {
+        b.stall = 'Aucune ressource à portée';
+        clearTask(v);
+        v.state = 'idle';
+        v.idleFor += dt;
+        return;
+      }
+      node.claimedBy = v.id;
+      v.task.nodeId = node.id;
+      b.stall = null;
+    }
+    const node = world.nodes.get(v.task.nodeId!);
+    if (!node || !node.alive) {
+      v.task.nodeId = undefined;
+      return;
+    }
+    const stand = harvestStandPoint(world, node);
+    v.state = 'walking';
+    if (moveTowards(world, v, dt, stand.x, stand.y, node.kind === 'fish_shoal' ? 2.2 : 0.8)) {
+      v.task.phase = 1;
+      v.work = 0;
+    }
+    return;
+  }
+
+  if (v.task.phase === 1) {
+    const node = world.nodes.get(v.task.nodeId!);
+    if (!node || !node.alive || node.amount <= 0) {
+      v.task.nodeId = undefined;
+      v.task.phase = 0;
+      return;
+    }
+    v.state = 'working';
+    v.work += workRate(world, v, def.profession) * dt;
+    b.efficiency = clamp(b.efficiency + dt * 0.4, 0, 1);
+    if (v.work < g.work) return;
+
+    v.work = 0;
+    const out = yieldFromNode(world, b, node);
+    const taken = Math.min(out.amount, Math.max(1, node.amount));
+    node.amount -= g.fells ? node.maxAmount : taken;
+    if (node.amount <= 0 || g.fells) {
+      if (node.kind === 'wild_animal' || g.fells) {
+        world.killNode(node.id);
+      } else {
+        node.alive = false;
+        world.killNode(node.id);
+      }
+    }
+    node.claimedBy = 0;
+    v.carrying = out.good;
+    v.carryAmount = taken;
+    if (g.consumes) {
+      for (const [good, need] of Object.entries(g.consumes)) {
+        b.inv[good as GoodId] = Math.max(0, (b.inv[good as GoodId] ?? 0) - (need as number));
+      }
+    }
+    for (const [good, amount] of extraYields(world, b)) {
+      depositIntoBuilding(world, b, good, amount);
+    }
+    v.task.nodeId = undefined;
+    v.task.phase = 2;
+    return;
+  }
+
+  // Phase 2: carry the load back to the camp.
+  const entrance = world.entranceOf(b);
+  v.state = 'hauling';
+  if (moveTowards(world, v, dt, entrance.x, entrance.y, 0.9)) {
+    if (v.carrying) {
+      const leftover = depositIntoBuilding(world, b, v.carrying, v.carryAmount);
+      if (leftover > 0) world.addToStock(v.carrying, leftover, b.cx, b.cy);
+    }
+    v.carrying = null;
+    v.carryAmount = 0;
+    v.task.phase = 0;
+  }
+}
+
+function dominantGood(b: Building): GoodId | null {
+  let best: GoodId | null = null;
+  let amount = 0;
+  for (const [g, a] of Object.entries(b.inv)) {
+    if ((a as number) > amount) {
+      amount = a as number;
+      best = g as GoodId;
+    }
+  }
+  return best;
+}
+
+function doProduce(world: World, v: Villager, dt: number): void {
+  const b = world.buildings.get(v.task.targetId!);
+  if (!b || b.state !== 'active' || !b.enabled) {
+    clearTask(v);
+    return;
+  }
+  const def = BUILDINGS[b.def];
+
+  if (v.task.phase === 0) {
+    v.state = 'walking';
+    const target = workStation(world, b, v);
+    if (moveTowards(world, v, dt, target.x, target.y, 1.1)) v.task.phase = 1;
+    return;
+  }
+
+  v.state = 'working';
+
+  // Pure service buildings (market, chapel, tavern, scholars) just need staff.
+  if (!activeRecipe(b)) {
+    b.efficiency = 1;
+    b.stall = null;
+    // Merchants and innkeepers drift around their stalls.
+    if (world.rng.chance(dt * 0.25)) {
+      const t = workStation(world, b, v);
+      v.targetX = t.x;
+      v.targetY = t.y;
+    }
+    moveTowards(world, v, dt, v.targetX, v.targetY, 0.6);
+    return;
+  }
+
+  const recipe = activeRecipe(b);
+  if (!recipe) {
+    v.state = 'idle';
+    return;
+  }
+  // Check inputs.
+  for (const [good, need] of Object.entries(recipe.inputs)) {
+    if ((b.inv[good as GoodId] ?? 0) < (need as number)) {
+      b.stall = `Manque ${GOODS[good as GoodId].name}`;
+      b.efficiency = Math.max(0, b.efficiency - dt * 0.5);
+      v.state = 'idle';
+      return;
+    }
+  }
+  if (buildingSpace(world, b) < 8) {
+    b.stall = 'Stock plein';
+    b.efficiency = Math.max(0, b.efficiency - dt * 0.5);
+    v.state = 'idle';
+    return;
+  }
+  b.stall = null;
+
+  // Fields and pastures are seasonal; workshops are not.
+  const seasonal = def.category === 'farming' ? world.growthFactor() : 1;
+  const fertility =
+    def.category === 'farming' ? 0.55 + world.averageFertility(b.x, b.y, b.w, b.h) * 0.9 : 1;
+  const rate = workRate(world, v, def.profession) * seasonal * fertility;
+  v.work += rate * dt;
+  b.work += rate * dt;
+  b.efficiency = clamp(b.efficiency + dt * 0.35, 0, 1);
+
+  // Farmers roam their field while they work; it reads far better.
+  if (def.category === 'farming' && world.rng.chance(dt * 0.6)) {
+    v.targetX = b.x + world.rng.range(0.5, b.w - 0.5);
+    v.targetY = b.y + world.rng.range(0.5, b.h - 0.5);
+  }
+  if (def.category === 'farming') moveTowards(world, v, dt, v.targetX, v.targetY, 0.4);
+
+  if (b.work >= recipe.work) {
+    b.work -= recipe.work;
+    for (const [good, need] of Object.entries(recipe.inputs)) {
+      b.inv[good as GoodId] = Math.max(0, (b.inv[good as GoodId] ?? 0) - (need as number));
+      if (!b.inv[good as GoodId]) delete b.inv[good as GoodId];
+    }
+    const yieldMul = world.modifiers.craftYield;
+    for (const [good, amount] of Object.entries(recipe.outputs)) {
+      const qty = Math.max(1, Math.round((amount as number) * yieldMul));
+      const leftover = depositIntoBuilding(world, b, good as GoodId, qty);
+      if (leftover > 0) world.addToStock(good as GoodId, leftover, b.cx, b.cy);
+    }
+  }
+}
+
+/** A stable per-worker spot inside or beside the building. */
+function workStation(world: World, b: Building, v: Villager): { x: number; y: number } {
+  const def = BUILDINGS[b.def];
+  if (def.category === 'farming' || def.livestock) {
+    const seed = (v.id * 2654435761) % 1000 / 1000;
+    return {
+      x: b.x + 0.7 + seed * (b.w - 1.4),
+      y: b.y + 0.7 + ((v.id * 7) % 100) / 100 * (b.h - 1.4),
+    };
+  }
+  return world.entranceOf(b);
+}
+
+function doHaul(world: World, v: Villager, dt: number): void {
+  const good = v.task.good;
+  if (!good) {
+    clearTask(v);
+    return;
+  }
+
+  if (v.task.phase === 0) {
+    // Travel to the source and load up.
+    const from = v.task.fromId === -1 ? world.findStoreWith(good, v.x, v.y) : world.buildings.get(v.task.fromId!);
+    if (!from) {
+      releaseJob(world, v);
+      clearTask(v);
+      return;
+    }
+    v.task.fromId = from.id;
+    v.state = 'walking';
+    const e = world.entranceOf(from);
+    if (moveTowards(world, v, dt, e.x, e.y, 0.9)) {
+      const want = Math.min(v.task.amount ?? 999, carryCapacity(world, good));
+      const have = from.inv[good] ?? 0;
+      const take = Math.min(want, have);
+      if (take <= 0) {
+        releaseJob(world, v);
+        clearTask(v);
+        return;
+      }
+      from.inv[good] = have - take;
+      if (from.inv[good]! <= 0) delete from.inv[good];
+      v.carrying = good;
+      v.carryAmount = take;
+      v.task.phase = 1;
+    }
+    return;
+  }
+
+  // Deliver.
+  let to = v.task.toId === -1 ? null : world.buildings.get(v.task.toId!);
+  if (!to) {
+    to = world.findStoreForDeposit(good, v.x, v.y);
+    if (!to) {
+      // Nowhere to put it: drop the load back where we are, if possible.
+      v.carrying = null;
+      v.carryAmount = 0;
+      releaseJob(world, v);
+      clearTask(v);
+      return;
+    }
+    v.task.toId = to.id;
+  }
+  v.state = 'hauling';
+  const e = world.entranceOf(to);
+  if (moveTowards(world, v, dt, e.x, e.y, 0.9)) {
+    if (v.carrying) {
+      let leftover: number;
+      if (to.state === 'planned' || to.state === 'building') {
+        to.delivered[v.carrying] = (to.delivered[v.carrying] ?? 0) + v.carryAmount;
+        leftover = 0;
+      } else {
+        leftover = depositIntoBuilding(world, to, v.carrying, v.carryAmount);
+      }
+      if (leftover > 0) world.addToStock(v.carrying, leftover, to.cx, to.cy);
+    }
+    v.carrying = null;
+    v.carryAmount = 0;
+    completeJob(world, v);
+    clearTask(v);
+  }
+}
+
+function releaseJob(world: World, v: Villager): void {
+  for (const j of world.haulJobs) if (j.claimedBy === v.id) j.claimedBy = 0;
+}
+
+function completeJob(world: World, v: Villager): void {
+  world.haulJobs = world.haulJobs.filter((j) => j.claimedBy !== v.id);
+}
+
+function doBuild(world: World, v: Villager, dt: number): void {
+  const b = world.buildings.get(v.task.targetId!);
+  if (!b || (b.state !== 'planned' && b.state !== 'building')) {
+    clearTask(v);
+    return;
+  }
+  if (v.task.phase === 0) {
+    v.state = 'walking';
+    const e = world.entranceOf(b);
+    if (moveTowards(world, v, dt, e.x, e.y, 1.2)) v.task.phase = 1;
+    return;
+  }
+  if (!hasAllMaterials(world, b)) {
+    v.state = 'idle';
+    b.stall = 'Matériaux manquants';
+    clearTask(v);
+    return;
+  }
+  b.stall = null;
+  b.state = 'building';
+  v.state = 'working';
+  const def = BUILDINGS[b.def];
+  b.buildProgress += workRate(world, v, 'builder') * world.modifiers.buildSpeed * 1.4 * dt;
+  if (b.buildProgress >= def.buildWork) {
+    b.buildProgress = def.buildWork;
+    b.state = 'active';
+    b.efficiency = 0;
+    world.emitter.emit('buildingCompleted', b);
+    world.notify(`${def.name} terminé`, '🏗️', 'good', b.cx, b.cy);
+    clearTask(v);
+  }
+}
+
+function doEat(world: World, v: Villager, dt: number): void {
+  if (v.task.phase === 0) {
+    const source = findFoodSource(world, v);
+    if (!source) {
+      v.state = 'idle';
+      // Starvation is handled by the population system; keep wandering meanwhile.
+      v.task = { kind: 'wander' };
+      const t = wanderTarget(world, v, world.rng);
+      v.targetX = t.x;
+      v.targetY = t.y;
+      return;
+    }
+    v.task.targetId = source.id;
+    v.task.phase = 1;
+  }
+  const b = world.buildings.get(v.task.targetId!);
+  if (!b) {
+    clearTask(v);
+    return;
+  }
+  v.state = 'walking';
+  const e = world.entranceOf(b);
+  if (moveTowards(world, v, dt, e.x, e.y, 1.0)) {
+    const good = bestFoodIn(b);
+    if (!good) {
+      clearTask(v);
+      return;
+    }
+    b.inv[good] = (b.inv[good] ?? 0) - 1;
+    if (b.inv[good]! <= 0) delete b.inv[good];
+    v.satiety = Math.min(100, v.satiety + GOODS[good].nutrition * 22);
+    v.state = 'eating';
+    if (v.satiety > 72) clearTask(v);
+  }
+}
+
+function findFoodSource(world: World, v: Villager): Building | null {
+  let best: Building | null = null;
+  let bestD = Infinity;
+  for (const b of world.buildingList) {
+    if (b.state !== 'active') continue;
+    const def = BUILDINGS[b.def];
+    const isMarket = def.service?.kind === 'market';
+    const isStore = def.storage?.global;
+    if (!isMarket && !isStore) continue;
+    if (!bestFoodIn(b)) continue;
+    // Markets are strongly preferred: that is the whole point of building them.
+    const d = (b.cx - v.x) ** 2 + (b.cy - v.y) ** 2 * (isMarket ? 0.35 : 1.8);
+    if (d < bestD) {
+      bestD = d;
+      best = b;
+    }
+  }
+  return best;
+}
+
+function bestFoodIn(b: Building): GoodId | null {
+  let best: GoodId | null = null;
+  let bestNutrition = 0;
+  for (const [g, amount] of Object.entries(b.inv)) {
+    if ((amount as number) <= 0) continue;
+    const n = GOODS[g as GoodId].nutrition;
+    if (n > bestNutrition) {
+      bestNutrition = n;
+      best = g as GoodId;
+    }
+  }
+  return best;
+}
+
+function doSleep(world: World, v: Villager, dt: number): void {
+  const home = v.homeId ? world.buildings.get(v.homeId) : null;
+  if (!home) {
+    v.energy = Math.min(100, v.energy + dt * 2);
+    clearTask(v);
+    return;
+  }
+  if (v.task.phase === 0) {
+    v.state = 'walking';
+    const e = world.entranceOf(home);
+    if (moveTowards(world, v, dt, e.x, e.y, 0.8)) {
+      v.task.phase = 1;
+      // Tuck villagers inside so streets empty out at night.
+      v.x = home.cx;
+      v.y = home.cy;
+    }
+    return;
+  }
+  v.state = 'sleeping';
+  v.energy = Math.min(100, v.energy + dt * 9);
+  if (v.energy >= 99 || !isNight(world.time.dayFraction)) clearTask(v);
+}
+
+function doWander(world: World, v: Villager, dt: number): void {
+  v.state = 'relaxing';
+  if (moveTowards(world, v, dt, v.targetX, v.targetY, 0.6)) clearTask(v);
+}
+
+function doDouse(world: World, v: Villager, dt: number): void {
+  const b = world.buildings.get(v.task.targetId!);
+  if (!b || b.state !== 'burning') {
+    clearTask(v);
+    return;
+  }
+  v.state = 'walking';
+  const e = world.entranceOf(b);
+  if (moveTowards(world, v, dt, e.x, e.y, 1.6)) {
+    v.state = 'working';
+    const strength = v.profession === 'firewarden' ? 0.16 : 0.055;
+    b.fire = Math.max(0, b.fire - strength * dt);
+  }
+}
+
+/** Fields and pastures never block walking, so villagers cross them freely. */
+export function isWalkableTerrainForWork(world: World, x: number, y: number): boolean {
+  return world.map.inBounds(x, y) && world.map.terrain[world.map.idx(x, y)] !== TERRAIN.WATER;
+}
