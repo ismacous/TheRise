@@ -4,7 +4,6 @@ import { computeStats, createNewGame, type Simulation } from '../src/sim/simulat
 import { World } from '../src/sim/world';
 import { igniteBuilding } from '../src/sim/events';
 import { createVillager } from '../src/sim/villagers';
-import { createVillager } from '../src/sim/villagers';
 
 function run(sim: Simulation, seconds: number): void {
   const steps = Math.round(seconds / 0.1);

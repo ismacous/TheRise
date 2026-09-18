@@ -7,8 +7,13 @@ import type { WorldGenOptions } from './worldgen';
 import { createPartnerRuntime } from './economy';
 import { TRADE_PARTNERS } from '../data/trade';
 
-export const SAVE_VERSION = 3;
-export const SAVE_KEY = 'therise.save.v3';
+/**
+ * Bumped to 4 because version 3 snapshots could contain fractional building
+ * origins, written before the spatial-index bug was fixed. Loading one would
+ * revive a village whose farms can never produce.
+ */
+export const SAVE_VERSION = 4;
+export const SAVE_KEY = 'therise.save.v4';
 
 interface NodeDiff {
   /** Ids present in the freshly generated world that no longer exist. */
@@ -151,6 +156,8 @@ export function deserialize(data: SaveData): Simulation {
   for (const raw of data.buildings) {
     const b: Building = {
       ...raw,
+      x: Math.round(raw.x),
+      y: Math.round(raw.y),
       delivered: { ...raw.delivered },
       inv: { ...raw.inv },
       workers: [...raw.workers],
