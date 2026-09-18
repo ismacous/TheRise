@@ -41,6 +41,12 @@ export class Game implements GameApi {
   placementId: BuildingId | null = null;
   placementRotation = 0;
   painting = false;
+  /**
+   * Where the ghost currently sits, as a footprint origin. Tapping the map
+   * only moves it; nothing is built until the player confirms. Placing on the
+   * first tap made it far too easy to drop a building in the wrong spot.
+   */
+  placementTile: { x: number; y: number } | null = null;
   selectedBuildingId: number | null = null;
   selectedVillagerId: number | null = null;
   openSheetId: SheetId | null = null;
@@ -56,9 +62,6 @@ export class Game implements GameApi {
   private paintedThisDrag = new Set<number>();
   /** Live feedback for the placement banner: resources inside the radius. */
   placementInfo: { valid: boolean; reason: string; resources: number; label: string } | null = null;
-  /** Last pointer position, so the placement ghost tracks the finger. */
-  private pointerX = -1;
-  private pointerY = -1;
 
   constructor(canvas: HTMLCanvasElement, uiRoot: HTMLElement, sim: Simulation, gen: Partial<WorldGenOptions>) {
     this.canvas = canvas;
@@ -92,12 +95,6 @@ export class Game implements GameApi {
     window.addEventListener('orientationchange', () => setTimeout(() => this.renderer.resize(), 220));
     window.addEventListener('keydown', (e) => this.handleKey(e));
     this.canvas.addEventListener('pointerup', () => this.paintedThisDrag.clear());
-    const trackPointer = (e: PointerEvent): void => {
-      this.pointerX = e.clientX;
-      this.pointerY = e.clientY;
-    };
-    this.canvas.addEventListener('pointerdown', trackPointer);
-    this.canvas.addEventListener('pointermove', trackPointer);
   }
 
   private handleKey(e: KeyboardEvent): void {
@@ -139,7 +136,8 @@ export class Game implements GameApi {
     const ty = Math.floor(hit.z);
 
     if (this.placementId) {
-      this.tryPlace(tx, ty);
+      // Aim only. The building goes down when the player presses Valider.
+      this.aimPlacement(tx, ty);
       return;
     }
 
@@ -176,28 +174,36 @@ export class Game implements GameApi {
     this.world.place(this.placementId, tx, ty);
   }
 
-  private tryPlace(tx: number, ty: number): void {
+  /** Moves the ghost to the tapped tile without building anything. */
+  private aimPlacement(tx: number, ty: number): void {
     const id = this.placementId!;
-    const def = BUILDINGS[id];
     const [w, h] = this.world.footprint(id, this.placementRotation);
-    // Centre the footprint on the tap so the ghost matches what appears.
-    const x = tx - Math.floor((w - 1) / 2);
-    const y = ty - Math.floor((h - 1) / 2);
+    this.placementTile = {
+      x: tx - Math.floor((w - 1) / 2),
+      y: ty - Math.floor((h - 1) / 2),
+    };
+  }
 
-    const check = this.world.canPlace(id, x, y, this.placementRotation);
+  /** Builds at the ghost's current position, if the spot is valid. */
+  confirmPlacement(): boolean {
+    const id = this.placementId;
+    const tile = this.placementTile;
+    if (!id || !tile) return false;
+    const def = BUILDINGS[id];
+    const check = this.world.canPlace(id, tile.x, tile.y, this.placementRotation);
     if (!check.ok) {
-      this.world.notify(check.reason, '🚫', 'bad');
-      return;
+      this.world.notify(check.reason, '', 'bad');
+      return false;
     }
     if (this.world.treasury < def.goldCost) {
-      this.world.notify("Pas assez d'or", '🪙', 'bad');
-      return;
+      this.world.notify("Pas assez d'or", '', 'bad');
+      return false;
     }
-    const b = this.world.place(id, x, y, this.placementRotation);
-    if (b) {
-      this.selectBuilding(b.id);
-      if (!this.painting) this.cancelPlacement();
-    }
+    const b = this.world.place(id, tile.x, tile.y, this.placementRotation);
+    if (!b) return false;
+    this.cancelPlacement();
+    this.selectBuilding(b.id);
+    return true;
   }
 
   // ── GameApi ─────────────────────────────────────────────────────────────
@@ -217,17 +223,47 @@ export class Game implements GameApi {
     this.painting = BUILDINGS[id].placement.kind === 'paint';
     this.renderer.controls.paintMode = this.painting;
     this.paintedThisDrag.clear();
+    // Start the ghost under the middle of the view so it is immediately visible.
+    this.placementTile = null;
+    this.aimAtScreenCentre();
     this.requestUiRefresh();
+  }
+
+  private aimAtScreenCentre(): void {
+    if (!this.placementId) return;
+    const rect = this.canvas.getBoundingClientRect();
+    const hit = this.renderer.controls.screenToGround(
+      rect.left + rect.width / 2,
+      rect.top + rect.height / 2,
+    );
+    if (hit) this.aimPlacement(Math.floor(hit.x), Math.floor(hit.z));
   }
 
   rotatePlacement(): void {
     if (!this.placementId) return;
     this.placementRotation = (this.placementRotation + 1) % 4;
+    // Keep the footprint centred on the same spot after a quarter turn.
+    if (this.placementTile) {
+      const centre = this.placementCentre();
+      const [w, h] = this.world.footprint(this.placementId, this.placementRotation);
+      this.placementTile = {
+        x: Math.round(centre.x - w / 2),
+        y: Math.round(centre.y - h / 2),
+      };
+    }
+    this.requestUiRefresh();
+  }
+
+  private placementCentre(): { x: number; y: number } {
+    const tile = this.placementTile!;
+    const [w, h] = this.world.footprint(this.placementId!, (this.placementRotation + 3) % 4);
+    return { x: tile.x + w / 2, y: tile.y + h / 2 };
   }
 
   cancelPlacement(): void {
     this.placementId = null;
     this.placementInfo = null;
+    this.placementTile = null;
     this.painting = false;
     this.renderer.controls.paintMode = false;
     this.renderer.ghost.hide();
@@ -401,21 +437,14 @@ export class Game implements GameApi {
 
   private updateGhost(): void {
     if (!this.placementId) return;
-    const controls = this.renderer.controls;
-    // The ghost tracks the finger, falling back to the screen centre before
-    // the player has touched the map.
-    const rect = this.canvas.getBoundingClientRect();
-    const px = this.pointerX >= 0 ? this.pointerX : rect.left + rect.width / 2;
-    const py = this.pointerY >= 0 ? this.pointerY : rect.top + rect.height / 2;
-    const hit = controls.screenToGround(px, py);
-    if (!hit) {
+    if (!this.placementTile) this.aimAtScreenCentre();
+    if (!this.placementTile) {
       this.renderer.ghost.hide();
       return;
     }
     const id = this.placementId;
     const [w, h] = this.world.footprint(id, this.placementRotation);
-    const x = Math.floor(hit.x) - Math.floor((w - 1) / 2);
-    const y = Math.floor(hit.z) - Math.floor((h - 1) / 2);
+    const { x, y } = this.placementTile;
     const check = this.world.canPlace(id, x, y, this.placementRotation);
     const cx = x + w / 2;
     const cy = y + h / 2;

@@ -29,6 +29,8 @@ export interface GameApi {
   beginPlacement(id: BuildingId): void;
   rotatePlacement(): void;
   cancelPlacement(): void;
+  /** Builds at the ghost's position. Returns false when the spot is refused. */
+  confirmPlacement(): boolean;
   /** Road painting keeps the mode active between taps. */
   readonly painting: boolean;
   /** Live feedback about the spot currently under the placement ghost. */

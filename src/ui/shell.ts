@@ -1,5 +1,6 @@
 import { formatNumber } from '../core/util';
 import { BUILDINGS } from '../data/buildings';
+import { iconFor } from './panels';
 import { GOODS, type GoodId } from '../data/goods';
 import { TIER_NAMES } from '../sim/economy';
 import { SEASON_LABEL, type Notification } from '../sim/types';
@@ -199,6 +200,9 @@ export class UiShell {
     this.updateClock();
     this.updateResources();
     this.updateDock();
+    const placing = this.api.placementId !== null;
+    this.dock.style.display = placing ? 'none' : 'flex';
+    this.minimap.root.style.display = placing ? 'none' : 'block';
     this.updateEvents();
     this.updateObjective();
     this.updateBanner();
@@ -354,37 +358,85 @@ export class UiShell {
     const id = this.api.placementId;
     if (!id) {
       this.buildBanner.style.display = 'none';
+      this.buildBanner.dataset.v = '';
       return;
     }
     const def = BUILDINGS[id];
     const info = this.api.placementInfo;
-    const hint = info
-      ? info.valid
-        ? info.label
-          ? `${info.resources} ${info.label} à portée`
-          : 'Emplacement valide — touchez pour poser'
-        : info.reason
-      : def.placement.kind === 'paint'
-        ? 'Touchez et glissez pour tracer. ✕ pour terminer.'
-        : 'Touchez le sol pour poser le bâtiment.';
-    const key = `${id}|${hint}|${info?.valid}`;
-    if (this.buildBanner.dataset.v !== key) {
-      this.buildBanner.dataset.v = key;
-      clear(this.buildBanner);
-      const rotate = el('button', { class: 'icon-btn', text: '⟳', 'aria-label': 'Pivoter' });
-      onTap(rotate, () => this.api.rotatePlacement());
-      const cancel = el('button', { class: 'icon-btn', text: '✕', 'aria-label': 'Annuler' });
-      onTap(cancel, () => this.api.cancelPlacement());
-      this.buildBanner.append(
-        el('div', { class: 'grow' }, [
-          el('div', { class: 'name', text: def.name }),
-          el('div', { class: 'hint', text: hint }),
-        ]),
-        def.placement.kind === 'paint' ? cancel : rotate,
-        def.placement.kind === 'paint' ? el('span') : cancel,
-      );
-      this.buildBanner.classList.toggle('invalid', info ? !info.valid : false);
+    const painting = def.placement.kind === 'paint';
+    const valid = info ? info.valid : false;
+
+    const hint = painting
+      ? 'Glissez le doigt sur le sol pour tracer.'
+      : info
+        ? info.valid
+          ? info.label
+            ? `${info.resources} ${info.label} à portée`
+            : 'Emplacement valide'
+          : info.reason
+        : 'Visez un emplacement';
+
+    const key = `${id}|${hint}|${valid}|${this.api.placementRotation}`;
+    if (this.buildBanner.dataset.v === key) {
+      this.buildBanner.style.display = 'flex';
+      return;
     }
+    this.buildBanner.dataset.v = key;
+    clear(this.buildBanner);
+
+    const head = el('div', { class: 'place-head' }, [
+      el('span', { class: 'place-ic', text: iconFor(id) }),
+      el('div', { class: 'grow' }, [
+        el('div', { class: 'place-name', text: def.name }),
+        el('div', { class: `place-hint ${valid || painting ? '' : 'bad'}`, text: hint }),
+      ]),
+    ]);
+
+    // Costs, so the player never confirms a build they cannot afford.
+    const costs = el('div', { class: 'cost-row' });
+    const w = this.api.world;
+    if (def.goldCost > 0) {
+      costs.append(
+        el('span', { class: `cost ${w.treasury < def.goldCost ? 'missing' : ''}` }, [
+          el('span', { class: 'coin' }),
+          el('span', { text: String(def.goldCost) }),
+        ]),
+      );
+    }
+    for (const [g, n] of Object.entries(def.cost)) {
+      const good = g as GoodId;
+      const dot = el('span', { class: 'dot' });
+      dot.style.background = GOODS[good].color;
+      costs.append(
+        el('span', { class: `cost ${w.stockOf(good) < (n as number) ? 'missing' : ''}` }, [
+          dot,
+          el('span', { text: `${GOODS[good].short} ${n}` }),
+        ]),
+      );
+    }
+
+    const cancel = el('button', { class: 'btn', text: 'Annuler' });
+    onTap(cancel, () => this.api.cancelPlacement());
+
+    const row = el('div', { class: 'place-actions' });
+    if (!painting) {
+      const rotate = el('button', { class: 'btn', text: 'Pivoter' });
+      onTap(rotate, () => this.api.rotatePlacement());
+      const confirm = el('button', {
+        class: 'btn primary grow',
+        text: 'Construire ici',
+      });
+      (confirm as HTMLButtonElement).disabled = !valid;
+      onTap(confirm, () => this.api.confirmPlacement());
+      row.append(cancel, rotate, confirm);
+    } else {
+      const done = el('button', { class: 'btn primary grow', text: 'Terminer' });
+      onTap(done, () => this.api.cancelPlacement());
+      row.append(cancel, done);
+    }
+
+    this.buildBanner.append(head, costs, row);
+    this.buildBanner.classList.toggle('invalid', !valid && !painting);
     this.buildBanner.style.display = 'flex';
   }
 
