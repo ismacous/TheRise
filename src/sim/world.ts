@@ -97,6 +97,13 @@ export class World {
   /** Extra food consumption multiplier from active events. */
   foodUpkeepEvent = 1;
 
+  /**
+   * Change queues drained by the renderer each frame. Keeping them here means
+   * the simulation never has to know a renderer exists.
+   */
+  nodeChanges: Array<{ x: number; y: number }> = [];
+  terrainChanges: Array<{ x: number; y: number; w: number; h: number }> = [];
+
   /** Cached totals across every global storehouse, refreshed each tick. */
   stock: Partial<Record<GoodId, number>> = {};
   stockCapacity = 0;
@@ -267,6 +274,7 @@ export class World {
       const i = this.map.idx(x, y);
       this.map.road[i] = def.id === 'cobbled_road' ? 2 : 1;
       if (def.id === 'cobbled_road') this.takeFromStock('stone', 1);
+      this.terrainChanges.push({ x, y, w: 1, h: 1 });
       return null;
     }
 
@@ -286,6 +294,7 @@ export class World {
     if (salvage > 0) this.addToStock('logs', salvage);
 
     this.map.flatten(x, y, w, h);
+    this.terrainChanges.push({ x, y, w, h });
     const b: Building = {
       id: this.allocBuildingId(),
       def: defId,
@@ -351,6 +360,7 @@ export class World {
       this.treasury += Math.floor(def.goldCost * 0.4);
     }
     this.map.setOccupancy(b.x, b.y, b.w, b.h, -1);
+    this.terrainChanges.push({ x: b.x, y: b.y, w: b.w, h: b.h });
     this.buildings.delete(id);
     const i = this.buildingList.indexOf(b);
     if (i !== -1) this.buildingList.splice(i, 1);
@@ -362,6 +372,7 @@ export class World {
   killNode(id: number): void {
     const n = this.nodes.get(id);
     if (!n) return;
+    this.nodeChanges.push({ x: n.x, y: n.y });
     n.alive = false;
     const k = this.map.idx(Math.floor(n.x), Math.floor(n.y));
     if (this.map.inBounds(Math.floor(n.x), Math.floor(n.y)) && this.map.blocker[k] === id) {
@@ -372,6 +383,7 @@ export class World {
 
   addNode(node: ResourceNode): void {
     this.nodes.set(node.id, node);
+    this.nodeChanges.push({ x: node.x, y: node.y });
     if (node.kind === 'tree' || node.kind === 'stone_rock') {
       const x = Math.floor(node.x);
       const y = Math.floor(node.y);
