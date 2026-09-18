@@ -20,6 +20,15 @@ import {
   TIER_NAMES,
 } from '../sim/economy';
 import { activeObjectives, OBJECTIVES } from '../sim/objectives';
+import {
+  displayName,
+  gatherRadius,
+  housingCapacity,
+  outputMultiplier,
+  serviceRadius,
+  upgradeTargetOf,
+  workerSlots,
+} from '../sim/levels';
 import { activeRecipe, recipeOptions, setRecipe } from '../sim/recipes';
 import { availableResearch, canStartResearch, cancelResearch, researchRate, startResearch } from '../sim/research';
 import { fullName } from '../sim/villagers';
@@ -52,7 +61,12 @@ export function sheetTitle(id: SheetId, api: GameApi): { title: string; sub?: st
       return { title: 'Options' };
     case 'building': {
       const b = api.selectedBuildingId ? w.buildings.get(api.selectedBuildingId) : null;
-      return b ? { title: BUILDINGS[b.def].name } : { title: 'Bâtiment' };
+      if (!b) return { title: 'Bâtiment' };
+      const slots = workerSlots(b);
+      return {
+        title: displayName(b),
+        sub: slots > 0 ? `${b.workers.length}/${slots} ouvriers` : undefined,
+      };
     }
     case 'villager': {
       const v = api.selectedVillagerId ? w.villagerById.get(api.selectedVillagerId) : null;
@@ -918,18 +932,13 @@ function renderBuilding(api: GameApi, body: HTMLElement, refresh: Refresh): void
     return;
   }
   const def = BUILDINGS[b.def];
+  const slots = workerSlots(b);
 
-  body.append(
-    el('div', { class: 'detail-head' }, [
-      el('span', { class: 'big-ic', text: iconFor(b.def) }),
-      el('div', {}, [
-        el('div', { class: 'card-title', text: def.name }),
-        el('div', { class: 'card-desc', text: def.desc }),
-      ]),
-    ]),
-  );
+  // The sheet header already names the building; repeating it wastes a third
+  // of a phone screen.
+  body.append(el('div', { class: 'card-desc lead', text: def.desc }));
 
-  // Construction ---------------------------------------------------------
+  // ── Construction ────────────────────────────────────────────────────────
   if (b.state === 'planned' || b.state === 'building') {
     body.append(el('div', { class: 'section-title', text: 'Chantier' }));
     body.append(bar(b.buildProgress / Math.max(1, def.buildWork), 'blue'));
@@ -937,16 +946,15 @@ function renderBuilding(api: GameApi, body: HTMLElement, refresh: Refresh): void
     for (const [g, need] of Object.entries(def.cost)) {
       const good = g as GoodId;
       const have = b.delivered[good] ?? 0;
-      const dot = el('span', { class: 'dot' });
-      dot.style.background = GOODS[good].color;
-      missing.append(
-        el('span', { class: `cost ${have < (need as number) ? 'missing' : ''}` }, [
-          dot,
-          el('span', { text: `${have}/${need}` }),
-        ]),
-      );
+      missing.append(goodChip(good, `${have}/${need}`, have < (need as number)));
     }
     body.append(missing);
+    body.append(
+      el('div', {
+        class: 'card-desc',
+        text: 'Les villageois sans affectation apportent les matériaux et bâtissent.',
+      }),
+    );
   }
 
   if (b.state === 'ruined') {
@@ -969,33 +977,84 @@ function renderBuilding(api: GameApi, body: HTMLElement, refresh: Refresh): void
     );
   }
 
-  // Stats ----------------------------------------------------------------
-  const stats = el('div', { class: 'stat-grid' });
-  if (def.workers > 0) {
-    stats.append(statBox('Ouvriers', `${b.workers.length}/${def.workers}`));
+  // ── Improvement in progress ─────────────────────────────────────────────
+  if (b.upgrade) {
+    body.append(el('div', { class: 'section-title', text: 'Travaux en cours' }));
+    body.append(bar(b.upgrade.progress / Math.max(1, b.upgrade.total), 'blue'));
+    const remaining = (b.upgrade.total - b.upgrade.progress) / Math.max(0.25, api.speed);
+    body.append(el('div', { class: 'qty', text: `Encore ${formatDuration(remaining)}` }));
   }
-  if (def.housing) {
-    stats.append(statBox('Habitants', `${b.residents.length}/${def.housing.capacity}`));
+
+  // ── Worker slots ────────────────────────────────────────────────────────
+  if (slots > 0 && b.state === 'active') {
+    const free = w.availableWorkers(b).length;
+    body.append(
+      el('div', { class: 'section-title', text: `Postes — ${b.workers.length}/${slots}` }),
+    );
+    const grid = el('div', { class: 'slot-grid' });
+    for (let i = 0; i < slots; i++) {
+      const id = b.workers[i];
+      const v = id !== undefined ? w.villagerById.get(id) : undefined;
+      if (v) {
+        const prof = PROFESSIONS[v.profession] ?? PROFESSIONS.idle;
+        const slot = el('button', { class: 'slot filled', title: 'Retirer de ce poste' }, [
+          el('span', { class: 'slot-av', text: prof.icon }),
+          el('span', { class: 'slot-name', text: v.name }),
+        ]);
+        (slot.querySelector('.slot-av') as HTMLElement).style.background = prof.tunic;
+        onTap(slot, () => {
+          w.unassignWorker(b.id, v.id);
+          refresh();
+        });
+        grid.append(slot);
+      } else {
+        const slot = el('button', { class: `slot empty ${free > 0 ? '' : 'nobody'}` }, [
+          el('span', { class: 'slot-av', text: '+' }),
+          el('span', { class: 'slot-name', text: free > 0 ? 'Affecter' : 'Personne' }),
+        ]);
+        (slot as HTMLButtonElement).disabled = free === 0;
+        onTap(slot, () => {
+          w.assignWorker(b.id);
+          refresh();
+        });
+        grid.append(slot);
+      }
+    }
+    body.append(grid);
+    body.append(
+      el('div', {
+        class: 'card-desc',
+        text:
+          free > 0
+            ? `${free} villageois disponibles. Le rendement suit le nombre d’ouvriers.`
+            : 'Aucun villageois disponible : libérez un poste ailleurs ou agrandissez le village.',
+      }),
+    );
+  }
+
+  // ── Stats ───────────────────────────────────────────────────────────────
+  const stats = el('div', { class: 'stat-grid' });
+  if (housingCapacity(b) > 0) {
+    stats.append(statBox('Habitants', `${b.residents.length}/${housingCapacity(b)}`));
   }
   if (def.gather || def.recipe || def.recipes) {
-    stats.append(statBox('Rendement', `${Math.round(b.efficiency * 100)}%`));
+    stats.append(statBox('Rendement', `${Math.round(b.efficiency * outputMultiplier(b) * 100)}%`));
   }
   if (def.livestock) {
     stats.append(statBox('Troupeau', `${Math.floor(b.herd)}/${def.livestock.capacity}`));
   }
-  if (def.service && def.service.radius > 0) {
-    stats.append(statBox('Portée', `${def.service.radius} cases`));
+  if (def.gather) stats.append(statBox('Portée', `${Math.round(gatherRadius(b))} cases`));
+  else if (def.service && def.service.radius > 0) {
+    stats.append(statBox('Portée', `${Math.round(serviceRadius(b))} cases`));
   }
   if (def.storage) {
-    stats.append(statBox('Stock', `${Math.round(w.usedOf(b))}/${w.capacityOf(b) || def.storage.capacity}`));
+    stats.append(statBox('Stock', `${Math.round(w.usedOf(b))}/${w.capacityOf(b)}`));
   }
   if (stats.children.length > 0) body.append(stats);
 
-  if (b.stall) {
-    body.append(el('div', { class: 'empty-note', text: `⚠️ ${b.stall}` }));
-  }
+  if (b.stall) body.append(el('div', { class: 'empty-note', text: `Arrêt : ${b.stall}` }));
 
-  // Recipe selector ------------------------------------------------------
+  // ── Recipe selector ─────────────────────────────────────────────────────
   const options = recipeOptions(b.def);
   if (options.length > 1) {
     body.append(el('div', { class: 'section-title', text: 'Production' }));
@@ -1018,19 +1077,19 @@ function renderBuilding(api: GameApi, body: HTMLElement, refresh: Refresh): void
   if (recipe) {
     const flow = el('div', { class: 'cost-row' });
     for (const [g, n] of Object.entries(recipe.inputs)) flow.append(goodChip(g as GoodId, `${n}`));
-    if (Object.keys(recipe.inputs).length > 0) flow.append(el('span', { class: 'cost', text: '→' }));
+    if (Object.keys(recipe.inputs).length > 0) flow.append(el('span', { class: 'cost arrow', text: '→' }));
     for (const [g, n] of Object.entries(recipe.outputs)) flow.append(goodChip(g as GoodId, `${n}`));
     body.append(flow);
   }
   if (def.gather) {
     const flow = el('div', { class: 'cost-row' });
     for (const [g, n] of Object.entries(def.gather.consumes ?? {})) flow.append(goodChip(g as GoodId, `${n}`));
-    if (def.gather.consumes) flow.append(el('span', { class: 'cost', text: '→' }));
+    if (def.gather.consumes) flow.append(el('span', { class: 'cost arrow', text: '→' }));
     for (const [g, n] of Object.entries(def.gather.outputs)) flow.append(goodChip(g as GoodId, `${n}`));
     if (flow.children.length > 0) body.append(flow);
   }
 
-  // Inventory ------------------------------------------------------------
+  // ── Inventory ───────────────────────────────────────────────────────────
   const invEntries = Object.entries(b.inv).filter(([, n]) => (n as number) > 0.5);
   if (invEntries.length > 0) {
     body.append(el('div', { class: 'section-title', text: 'Sur place' }));
@@ -1039,14 +1098,6 @@ function renderBuilding(api: GameApi, body: HTMLElement, refresh: Refresh): void
     body.append(inv);
   }
 
-  // Workers --------------------------------------------------------------
-  if (b.workers.length > 0) {
-    body.append(el('div', { class: 'section-title', text: 'Équipe' }));
-    for (const id of b.workers) {
-      const v = w.villagerById.get(id);
-      if (v) body.append(villagerRow(api, v));
-    }
-  }
   if (b.residents.length > 0) {
     body.append(el('div', { class: 'section-title', text: 'Foyer' }));
     for (const id of b.residents) {
@@ -1055,37 +1106,55 @@ function renderBuilding(api: GameApi, body: HTMLElement, refresh: Refresh): void
     }
   }
 
-  // Actions --------------------------------------------------------------
+  // ── Actions ─────────────────────────────────────────────────────────────
   const actions = el('div', { class: 'btn-row' });
 
-  if (b.state === 'active' && def.upgradesTo) {
-    const next = BUILDINGS[def.upgradesTo];
-    const check = w.canUpgrade(b);
-    const btn = el('button', {
-      class: `btn ${check.ok ? 'primary' : ''}`,
-      text: `⬆️ ${next.name}`,
-      title: check.reason,
-    });
-    (btn as HTMLButtonElement).disabled = !check.ok;
-    onTap(btn, () => {
-      const created = w.upgrade(b.id);
-      if (created) api.selectBuilding(created.id);
+  if (b.state === 'active' && !b.upgrade) {
+    const target = upgradeTargetOf(b);
+    if (target) {
+      const check = w.canUpgrade(b);
+      const btn = el('button', {
+        class: `btn ${check.ok ? 'primary' : ''}`,
+        text: `Améliorer en ${target.name}`,
+        title: check.reason,
+      });
+      (btn as HTMLButtonElement).disabled = !check.ok;
+      onTap(btn, () => {
+        w.startUpgrade(b.id);
+        refresh();
+      });
+      actions.append(btn);
+
+      body.append(el('div', { class: 'section-title', text: 'Coût de l’amélioration' }));
+      const costs = el('div', { class: 'cost-row' });
+      if (target.goldCost) {
+        costs.append(
+          el('span', { class: `cost ${w.treasury < target.goldCost ? 'missing' : ''}` }, [
+            el('span', { class: 'coin' }),
+            el('span', { text: String(target.goldCost) }),
+          ]),
+        );
+      }
+      for (const [g, n] of Object.entries(target.cost)) {
+        costs.append(goodChip(g as GoodId, `${n}`, w.stockOf(g as GoodId) < (n as number)));
+      }
+      body.append(costs);
+      if (!check.ok) body.append(el('div', { class: 'card-desc', text: check.reason }));
+    }
+  }
+
+  if (b.upgrade) {
+    const cancel = el('button', { class: 'btn', text: 'Annuler les travaux' });
+    onTap(cancel, () => {
+      w.cancelUpgrade(b.id);
       refresh();
     });
-    actions.append(btn);
-    if (!check.ok) {
-      body.append(el('div', { class: 'card-desc', text: `Amélioration : ${check.reason}` }));
-    } else {
-      const costs = el('div', { class: 'cost-row' });
-      if (next.goldCost) costs.append(el('span', { class: 'cost', text: `🪙 ${next.goldCost}` }));
-      for (const [g, n] of Object.entries(next.cost)) costs.append(goodChip(g as GoodId, `${n}`));
-      body.append(el('div', { class: 'section-title', text: 'Coût de l’amélioration' }), costs);
-    }
+    actions.append(cancel);
   }
 
   const demolish = el('button', {
     class: 'btn danger',
-    text: b.state === 'ruined' ? '🧹 Déblayer' : '🧨 Démolir',
+    text: b.state === 'ruined' ? 'Déblayer' : 'Démolir',
   });
   onTap(demolish, () => {
     w.removeBuilding(b.id, true);
@@ -1103,10 +1172,10 @@ function statBox(k: string, v: string): HTMLElement {
   ]);
 }
 
-function goodChip(good: GoodId, amount: string): HTMLElement {
+function goodChip(good: GoodId, amount: string, missing = false): HTMLElement {
   const dot = el('span', { class: 'dot' });
   dot.style.background = GOODS[good].color;
-  return el('span', { class: 'cost', title: GOODS[good].name }, [
+  return el('span', { class: `cost ${missing ? 'missing' : ''}`, title: GOODS[good].name }, [
     dot,
     el('span', { text: `${GOODS[good].short} ${amount}` }),
   ]);

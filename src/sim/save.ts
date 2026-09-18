@@ -12,8 +12,8 @@ import { TRADE_PARTNERS } from '../data/trade';
  * origins, written before the spatial-index bug was fixed. Loading one would
  * revive a village whose farms can never produce.
  */
-export const SAVE_VERSION = 4;
-export const SAVE_KEY = 'therise.save.v4';
+export const SAVE_VERSION = 5;
+export const SAVE_KEY = 'therise.save.v5';
 
 interface NodeDiff {
   /** Ids present in the freshly generated world that no longer exist. */
@@ -163,6 +163,8 @@ export function deserialize(data: SaveData): Simulation {
       workers: [...raw.workers],
       residents: [...raw.residents],
       recipeIndex: raw.recipeIndex ?? 0,
+      level: raw.level ?? 1,
+      upgrade: raw.upgrade ? { ...raw.upgrade } : null,
     };
     w.map.flatten(b.x, b.y, b.w, b.h);
     w.map.setOccupancy(b.x, b.y, b.w, b.h, b.id);

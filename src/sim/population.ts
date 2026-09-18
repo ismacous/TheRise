@@ -1,6 +1,6 @@
 import { clamp, damp } from '../core/util';
-import { BUILDINGS, type BuildingCategory } from '../data/buildings';
-import { COMFORT_GOODS, GOODS, type GoodId } from '../data/goods';
+import { BUILDINGS } from '../data/buildings';
+import { COMFORT_GOODS, GOODS } from '../data/goods';
 import {
   ADULT_AGE,
   OLD_AGE,
@@ -11,150 +11,50 @@ import {
   happinessTarget,
   satietyDecayPerSecond,
 } from './villagers';
+import { housingCapacity, workerSlots } from './levels';
 import { DAY_SECONDS } from './world';
 import type { Building, Villager } from './types';
 import type { World } from './world';
 
-/** Hiring order. Food and logistics come first when the larder runs low. */
-function employmentPriority(world: World, b: Building): number {
-  const def = BUILDINGS[b.def];
-  const base: Record<BuildingCategory, number> = {
-    gathering: 8,
-    farming: 8,
-    industry: 7,
-    storage: 6,
-    crafting: 5,
-    service: 5,
-    civic: 4,
-    housing: 0,
-    infrastructure: 0,
-  };
-  let p = base[def.category];
-  const producesFood =
-    (def.recipe && Object.keys(def.recipe.outputs).some((g) => GOODS[g as GoodId].nutrition > 0)) ||
-    (def.gather && Object.keys(def.gather.outputs).some((g) => GOODS[g as GoodId].nutrition > 0));
-  if (producesFood && world.stats.foodDays < 6) p += 6;
-  if (def.service?.kind === 'market' && world.stats.foodDays < 8) p += 4;
-  // Buildings that are starved of input do not need more idle hands.
-  if (b.stall && b.stall.startsWith('Manque')) p -= 3;
-  return p;
-}
-
 /**
- * Share of the adult workforce allowed to be carriers. Storehouses offer far
- * more porter slots than a young village should fill: without this cap the
- * first ten villagers all become porters and nothing is ever produced.
+ * Staffing is the player's decision now, so this only enforces the rules:
+ * a worker whose building vanished, who grew too old or too ill, or who no
+ * longer fits in the building's slots goes back to the pool of labourers.
+ *
+ * Unassigned adults are not idle — they are the ones who build and haul.
  */
-function carrierBudget(world: World): number {
-  return Math.max(1, Math.round(world.stats.adults * 0.25));
-}
-
-function countCarriers(world: World): number {
-  let n = 0;
-  for (const v of world.villagers) if (v.profession === 'carrier') n++;
-  return n;
-}
-
 export function updateEmployment(world: World): void {
-  // Drop workers whose workplace is gone or disabled.
   for (const v of world.villagers) {
     if (!v.workId) continue;
     const b = world.buildings.get(v.workId);
-    if (!b || b.state !== 'active' || !b.enabled || !canWork(v)) {
-      if (b) {
-        const i = b.workers.indexOf(v.id);
-        if (i !== -1) b.workers.splice(i, 1);
-      }
-      v.workId = 0;
-      v.profession = v.age < ADULT_AGE ? 'child' : 'idle';
-      dropCarried(world, v);
-      v.task = { kind: 'none' };
+    const stillValid =
+      b &&
+      b.state === 'active' &&
+      canWork(v) &&
+      b.workers.indexOf(v.id) < workerSlots(b);
+    if (stillValid) continue;
+    if (b) {
+      const i = b.workers.indexOf(v.id);
+      if (i !== -1) b.workers.splice(i, 1);
     }
+    v.workId = 0;
+    v.profession = v.age < ADULT_AGE ? 'child' : 'idle';
+    dropCarried(world, v);
+    v.task = { kind: 'none' };
   }
 
-  const carrierCap = carrierBudget(world);
-  let carriers = countCarriers(world);
-
-  const openings: Array<{ b: Building; priority: number }> = [];
-  for (const b of world.buildingList) {
-    if (b.state !== 'active' || !b.enabled) continue;
-    const def = BUILDINGS[b.def];
-    if (def.workers <= 0) continue;
-    if (b.workers.length >= def.workers) continue;
-    if (def.profession === 'carrier' && carriers >= carrierCap) continue;
-    openings.push({ b, priority: employmentPriority(world, b) });
-  }
-  if (openings.length === 0) return;
-  openings.sort((a, z) => z.priority - a.priority);
-
-  const free = world.villagers.filter((v) => canWork(v) && v.workId === 0);
-
-  // Nobody idle but something important is unstaffed: take a worker off the
-  // least useful job rather than leaving a bakery empty forever.
-  if (free.length === 0) {
-    const top = openings[0];
-    const donor = lowestPriorityWorker(world, top.priority);
-    if (!donor) return;
-    const from = world.buildings.get(donor.workId)!;
-    const i = from.workers.indexOf(donor.id);
-    if (i !== -1) from.workers.splice(i, 1);
-    donor.workId = 0;
-    donor.profession = 'idle';
-    donor.task = { kind: 'none' };
-    free.push(donor);
-  }
-
-  for (const { b } of openings) {
-    const def = BUILDINGS[b.def];
-    if (def.profession === 'carrier' && carriers >= carrierCap) continue;
-    while (b.workers.length < def.workers && free.length > 0) {
-      if (def.profession === 'carrier' && carriers >= carrierCap) break;
-      // Nearest idle adult to the workplace.
-      let bestIdx = 0;
-      let bestD = Infinity;
-      for (let i = 0; i < free.length; i++) {
-        const d = (free[i].x - b.cx) ** 2 + (free[i].y - b.cy) ** 2;
-        if (d < bestD) {
-          bestD = d;
-          bestIdx = i;
-        }
-      }
-      const v = free.splice(bestIdx, 1)[0];
-      b.workers.push(v.id);
-      v.workId = b.id;
-      v.profession = def.profession;
-      dropCarried(world, v);
-      v.task = { kind: 'none' };
-      if (def.profession === 'carrier') carriers++;
-    }
-    if (free.length === 0) break;
-  }
-}
-
-/** The worker doing the least urgent job, if it is clearly less urgent. */
-function lowestPriorityWorker(world: World, wantedPriority: number): Villager | null {
-  let worst: Villager | null = null;
-  let worstPriority = wantedPriority - 2;
+  // Children who have come of age join the labour pool.
   for (const v of world.villagers) {
-    if (!v.workId || !canWork(v)) continue;
-    const b = world.buildings.get(v.workId);
-    if (!b) continue;
-    const p = employmentPriority(world, b);
-    if (p < worstPriority) {
-      worstPriority = p;
-      worst = v;
-    }
+    if (v.profession === 'child' && v.age >= ADULT_AGE) v.profession = 'idle';
   }
-  return worst;
 }
 
 export function updateHousing(world: World): void {
   const homeless = world.villagers.filter((v) => !v.homeId || !world.buildings.has(v.homeId));
   if (homeless.length === 0) return;
-  const homes = world.buildingList.filter((b) => {
-    const def = BUILDINGS[b.def];
-    return b.state === 'active' && def.housing && b.residents.length < def.housing.capacity;
-  });
+  const homes = world.buildingList.filter(
+    (b) => b.state === 'active' && housingCapacity(b) > b.residents.length,
+  );
   if (homes.length === 0) return;
 
   for (const v of homeless) {
@@ -166,8 +66,7 @@ export function updateHousing(world: World): void {
     let best: Building | null = null;
     let bestD = Infinity;
     for (const h of homes) {
-      const def = BUILDINGS[h.def];
-      if (h.residents.length >= def.housing!.capacity) continue;
+      if (h.residents.length >= housingCapacity(h)) continue;
       const d = (h.cx - ax) ** 2 + (h.cy - ay) ** 2;
       if (d < bestD) {
         bestD = d;

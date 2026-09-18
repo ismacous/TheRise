@@ -1245,3 +1245,85 @@ body {
     right: calc(var(--safe-right) + 570px);
   }
 }
+
+/* ── Worker slots ───────────────────────────────────────────────────────── */
+.slot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 7px;
+  margin-top: 4px;
+}
+
+.slot {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--panel-line);
+  background: var(--panel-raised);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+  min-height: 44px;
+}
+
+.slot-av {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  flex: 0 0 auto;
+  border: 2px solid rgba(0, 0, 0, 0.3);
+  color: #1c1814;
+  font-weight: 700;
+}
+
+.slot-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.slot.filled {
+  border-color: rgba(127, 192, 106, 0.45);
+}
+
+.slot.empty {
+  border-style: dashed;
+  color: var(--ink-faint);
+}
+
+.slot.empty .slot-av {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.14);
+  color: var(--ink-dim);
+}
+
+.slot:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.cost.arrow {
+  background: none;
+  color: var(--ink-faint);
+  padding: 2px 2px;
+}
+
+.coin {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: linear-gradient(140deg, #f0d06a, #a8832c);
+  display: inline-block;
+}
+
+.card-desc.lead {
+  font-size: 12.5px;
+  margin-bottom: 4px;
+}

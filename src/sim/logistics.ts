@@ -1,5 +1,6 @@
 import { BUILDINGS } from '../data/buildings';
 import { GOODS, type GoodId } from '../data/goods';
+import { storageCapacity } from './levels';
 import { activeRecipe, currentInputs, currentOutputs } from './recipes';
 import type { Building, HaulJob } from './types';
 import type { World } from './world';
@@ -110,7 +111,7 @@ export function rebuildHaulJobs(world: World): void {
 
     // 4. Keep markets stocked with food and comfort goods.
     if (def.service?.kind === 'market') {
-      const cap = def.storage?.capacity ?? 0;
+      const cap = storageCapacity(b);
       const used = world.usedOf(b);
       if (used >= cap * 0.85) continue;
       const wanted = marketWishlist(world);
@@ -148,7 +149,7 @@ export function rebuildHaulJobs(world: World): void {
 
   world.haulJobs = jobs;
   world.constructionSites = world.buildingList.filter(
-    (b) => b.state === 'planned' || b.state === 'building',
+    (b) => b.state === 'planned' || b.state === 'building' || b.upgrade !== null,
   );
 }
 
@@ -161,7 +162,7 @@ function countInFlight(jobs: HaulJob[], toId: number, good: GoodId): number {
 function targetInputStock(_world: World, b: Building, g: GoodId): number {
   const def = BUILDINGS[b.def];
   const per = activeRecipe(b)?.inputs[g] ?? def.gather?.consumes?.[g] ?? 1;
-  const cap = def.storage?.capacity ?? 20;
+  const cap = storageCapacity(b) || 20;
   // Keep roughly six batches on hand, bounded by the building's own shed.
   return Math.min(Math.max(per * 6, GOODS[g].carry), Math.floor(cap * 0.45));
 }

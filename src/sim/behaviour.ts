@@ -18,6 +18,7 @@ import {
   workRate,
   yieldFromNode,
 } from './villagers';
+import { outputMultiplier } from './levels';
 import { activeRecipe } from './recipes';
 import type { Building, HaulJob, Villager } from './types';
 import type { World } from './world';
@@ -180,8 +181,9 @@ function findConstructionSite(world: World, v: Villager): Building | null {
   let best: Building | null = null;
   let bestD = Infinity;
   for (const b of world.constructionSites) {
-    if (b.state !== 'planned' && b.state !== 'building') continue;
-    if (!hasAllMaterials(world, b)) continue;
+    const isUpgrade = b.state === 'active' && b.upgrade !== null;
+    if (!isUpgrade && b.state !== 'planned' && b.state !== 'building') continue;
+    if (!isUpgrade && !hasAllMaterials(world, b)) continue;
     const builders = countBuildersOn(world, b.id);
     if (builders >= 4) continue;
     const d = (b.cx - v.x) ** 2 + (b.cy - v.y) ** 2 + builders * 400;
@@ -428,7 +430,7 @@ function doProduce(world: World, v: Villager, dt: number): void {
       b.inv[good as GoodId] = Math.max(0, (b.inv[good as GoodId] ?? 0) - (need as number));
       if (!b.inv[good as GoodId]) delete b.inv[good as GoodId];
     }
-    const yieldMul = world.modifiers.craftYield;
+    const yieldMul = world.modifiers.craftYield * outputMultiplier(b);
     for (const [good, amount] of Object.entries(recipe.outputs)) {
       const qty = Math.max(1, Math.round((amount as number) * yieldMul));
       const leftover = depositIntoBuilding(world, b, good as GoodId, qty);
@@ -469,7 +471,7 @@ function doHaul(world: World, v: Villager, dt: number): void {
     v.state = 'walking';
     const e = world.entranceOf(from);
     if (moveTowards(world, v, dt, e.x, e.y, 0.9)) {
-      const want = Math.min(v.task.amount ?? 999, carryCapacity(world, good));
+      const want = Math.min(v.task.amount ?? 999, carryCapacity(world, good, v));
       const have = from.inv[good] ?? 0;
       const take = Math.min(want, have);
       if (take <= 0) {
@@ -530,7 +532,8 @@ function completeJob(world: World, v: Villager): void {
 
 function doBuild(world: World, v: Villager, dt: number): void {
   const b = world.buildings.get(v.task.targetId!);
-  if (!b || (b.state !== 'planned' && b.state !== 'building')) {
+  const upgrading = b?.state === 'active' && b.upgrade !== null;
+  if (!b || (!upgrading && b.state !== 'planned' && b.state !== 'building')) {
     clearTask(v);
     return;
   }
@@ -538,6 +541,17 @@ function doBuild(world: World, v: Villager, dt: number): void {
     v.state = 'walking';
     const e = world.entranceOf(b);
     if (moveTowards(world, v, dt, e.x, e.y, 1.2)) v.task.phase = 1;
+    return;
+  }
+
+  // Improvement works exactly like a build site, but on a running building.
+  if (upgrading) {
+    v.state = 'working';
+    b.upgrade!.progress += workRate(world, v, 'builder') * world.modifiers.buildSpeed * 1.4 * dt;
+    if (b.upgrade!.progress >= b.upgrade!.total) {
+      world.finishUpgrade(b.id);
+      clearTask(v);
+    }
     return;
   }
   if (!hasAllMaterials(world, b)) {

@@ -5,6 +5,7 @@ import { startResearch } from '../src/sim/research';
 import { orderSell } from '../src/sim/economy';
 import type { BuildingId } from '../src/data/buildings';
 import type { World } from '../src/sim/world';
+import { workerSlots } from '../src/sim/levels';
 
 const GEN = { seed: 'save-test' };
 
@@ -23,7 +24,10 @@ function place(w: World, def: BuildingId, node?: string, minNodes = 6) {
         if (n < minNodes) continue;
       }
       const b = w.place(def, x, y, 0, true);
-      if (b) return b;
+      if (b) {
+        while (b.workers.length < workerSlots(b) && w.assignWorker(b.id)) { /* staff it */ }
+        return b;
+      }
     }
   }
   return null;

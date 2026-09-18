@@ -4,6 +4,17 @@ import { computeStats, createNewGame, type Simulation } from '../src/sim/simulat
 import { World } from '../src/sim/world';
 import { igniteBuilding } from '../src/sim/events';
 import { createVillager } from '../src/sim/villagers';
+import { workerSlots } from '../src/sim/levels';
+import type { Building } from '../src/sim/types';
+
+/** Fills every slot of a building, as a player would by tapping them. */
+function staff(w: World, b: Building | null): Building | null {
+  if (!b) return null;
+  while (b.workers.length < workerSlots(b)) {
+    if (!w.assignWorker(b.id)) break;
+  }
+  return b;
+}
 
 function run(sim: Simulation, seconds: number): void {
   const steps = Math.round(seconds / 0.1);
@@ -27,7 +38,7 @@ function placeNear(w: World, def: BuildingId, node?: NodeKind, minNodes = 6) {
         if (n < minNodes) continue;
       }
       const b = w.place(def, x, y, 0, true);
-      if (b) return b;
+      if (b) return staff(w, b);
     }
   }
   return null;

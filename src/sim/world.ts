@@ -7,6 +7,7 @@ import { generateWorld, type WorldGenOptions } from './worldgen';
 import { PathFinder } from './pathfinding';
 import { SpatialGrid } from './spatial';
 import { computeModifiers, type Modifiers } from './modifiers';
+import { housingCapacity, serviceRadius, storageCapacity, upgradeTargetOf, workerSlots } from './levels';
 import { createPartnerRuntime, type PartnerRuntime } from './economy';
 import { TRADE_PARTNERS } from '../data/trade';
 import { TileMap } from './tilemap';
@@ -335,6 +336,8 @@ export class World {
       rotation,
       state: instant || def.buildWork <= 0 ? 'active' : 'planned',
       buildProgress: 0,
+      level: 1,
+      upgrade: null,
       delivered: {},
       inv: {},
       workers: [],
@@ -397,48 +400,75 @@ export class World {
     this.emitter.emit('buildingDestroyed', b);
   }
 
-  /** Can this building be replaced by its next tier right now? */
+  /** Can the player start improving this building right now? */
   canUpgrade(b: Building): PlacementCheck {
-    const def = BUILDINGS[b.def];
-    const nextId = def.upgradesTo;
-    if (!nextId) return { ok: false, reason: 'Amélioration maximale' };
-    const next = BUILDINGS[nextId];
-    if (next.requires && !this.research.completed.has(next.requires)) {
-      return { ok: false, reason: 'Recherche manquante' };
-    }
+    const target = upgradeTargetOf(b);
+    if (!target) return { ok: false, reason: 'Niveau maximal atteint' };
     if (b.state !== 'active') return { ok: false, reason: 'Bâtiment non actif' };
-    if (this.treasury < next.goldCost) return { ok: false, reason: "Pas assez d'or" };
-    for (const [g, amt] of Object.entries(next.cost)) {
-      if (this.stockOf(g as GoodId) < (amt as number)) {
+    if (b.upgrade) return { ok: false, reason: 'Travaux déjà en cours' };
+    if (target.toDef) {
+      const next = BUILDINGS[target.toDef];
+      if (next.requires && !this.research.completed.has(next.requires)) {
+        return { ok: false, reason: 'Recherche manquante' };
+      }
+      const [nw, nh] = this.footprint(target.toDef, b.rotation);
+      const nx = b.x - Math.floor((nw - b.w) / 2);
+      const ny = b.y - Math.floor((nh - b.h) / 2);
+      this.map.setOccupancy(b.x, b.y, b.w, b.h, -1);
+      const check = this.canPlace(target.toDef, nx, ny, b.rotation);
+      this.map.setOccupancy(b.x, b.y, b.w, b.h, b.id);
+      if (!check.ok) return { ok: false, reason: `Pas assez de place (${check.reason.toLowerCase()})` };
+    }
+    if (this.treasury < target.goldCost) return { ok: false, reason: "Pas assez d'or" };
+    for (const [g, amount] of Object.entries(target.cost)) {
+      if (this.stockOf(g as GoodId) < (amount as number)) {
         return { ok: false, reason: `Manque ${GOODS[g as GoodId].name}` };
       }
     }
-    const [nw, nh] = this.footprint(nextId, b.rotation);
-    const nx = b.x - Math.floor((nw - b.w) / 2);
-    const ny = b.y - Math.floor((nh - b.h) / 2);
-    // Free our own tiles so the footprint test only sees genuine obstacles.
-    this.map.setOccupancy(b.x, b.y, b.w, b.h, -1);
-    const check = this.canPlace(nextId, nx, ny, b.rotation);
-    this.map.setOccupancy(b.x, b.y, b.w, b.h, b.id);
-    if (!check.ok) return { ok: false, reason: `Pas assez de place (${check.reason.toLowerCase()})` };
     return { ok: true, reason: '' };
   }
 
   /**
-   * Replaces a building by its next tier, carrying over staff, residents and
-   * stock. Materials are consumed immediately: an upgrade is instant, which
-   * keeps the loop satisfying rather than fiddly.
+   * Starts an improvement. Materials and coin are taken up front, then the
+   * builders put in the work: an upgrade is something you watch happen, not a
+   * button that swaps one model for another.
    */
-  upgrade(id: number): Building | null {
+  startUpgrade(id: number): boolean {
     const b = this.buildings.get(id);
-    if (!b) return null;
-    const check = this.canUpgrade(b);
-    if (!check.ok) return null;
-    const nextId = BUILDINGS[b.def].upgradesTo!;
-    const next = BUILDINGS[nextId];
-    for (const [g, amt] of Object.entries(next.cost)) this.takeFromStock(g as GoodId, amt as number);
+    if (!b) return false;
+    if (!this.canUpgrade(b).ok) return false;
+    const target = upgradeTargetOf(b)!;
+    this.treasury -= target.goldCost;
+    for (const [g, amount] of Object.entries(target.cost)) {
+      this.takeFromStock(g as GoodId, amount as number);
+    }
+    b.upgrade = { toDef: target.toDef, toLevel: target.toLevel, progress: 0, total: target.work };
+    return true;
+  }
 
-    const [nw, nh] = this.footprint(nextId, b.rotation);
+  cancelUpgrade(id: number): void {
+    const b = this.buildings.get(id);
+    if (!b || !b.upgrade) return;
+    b.upgrade = null;
+  }
+
+  /** Called by the construction system once the builders finish. */
+  finishUpgrade(id: number): void {
+    const b = this.buildings.get(id);
+    if (!b || !b.upgrade) return;
+    const { toDef, toLevel } = b.upgrade;
+    b.upgrade = null;
+
+    if (!toDef) {
+      b.level = toLevel;
+      this.layoutVersion++;
+      this.notify(`${BUILDINGS[b.def].name} amélioré au niveau ${toLevel}`, '', 'good', b.cx, b.cy);
+      return;
+    }
+
+    // Swapping definition: carry over the staff, the residents and the stock.
+    const next = BUILDINGS[toDef];
+    const [nw, nh] = this.footprint(toDef, b.rotation);
     const nx = b.x - Math.floor((nw - b.w) / 2);
     const ny = b.y - Math.floor((nh - b.h) / 2);
     const workers = [...b.workers];
@@ -446,18 +476,17 @@ export class World {
     const inv = { ...b.inv };
     const rotation = b.rotation;
 
-    this.removeBuilding(id, false);
-    const created = this.place(nextId, nx, ny, rotation, true);
+    this.removeBuilding(b.id, false);
+    const created = this.place(toDef, nx, ny, rotation, true);
     if (!created) {
-      // Should not happen after canUpgrade, but never silently lose a building.
       const restored = this.place(b.def, b.x, b.y, rotation, true);
       if (restored) restored.inv = inv;
-      return null;
+      return;
     }
     created.inv = inv;
     for (const vid of workers) {
       const v = this.villagerById.get(vid);
-      if (!v || created.workers.length >= next.workers) break;
+      if (!v || created.workers.length >= workerSlots(created)) break;
       created.workers.push(vid);
       v.workId = created.id;
       v.profession = next.profession;
@@ -465,12 +494,54 @@ export class World {
     }
     for (const vid of residents) {
       const v = this.villagerById.get(vid);
-      if (!v || !next.housing || created.residents.length >= next.housing.capacity) break;
+      if (!v || created.residents.length >= housingCapacity(created)) break;
       created.residents.push(vid);
       v.homeId = created.id;
     }
-    this.notify(`${next.name} : amélioration terminée`, '⬆️', 'good', created.cx, created.cy);
-    return created;
+    this.notify(`${next.name} : travaux terminés`, '', 'good', created.cx, created.cy);
+  }
+
+  // ── Manual staffing ──────────────────────────────────────────────────────
+  /** Free adults, nearest first, who could take a job at this building. */
+  availableWorkers(b: Building): Villager[] {
+    const out: Villager[] = [];
+    for (const v of this.villagers) {
+      if (v.workId !== 0) continue;
+      if (v.profession === 'child') continue;
+      out.push(v);
+    }
+    out.sort(
+      (a, z) => (a.x - b.cx) ** 2 + (a.y - b.cy) ** 2 - ((z.x - b.cx) ** 2 + (z.y - b.cy) ** 2),
+    );
+    return out;
+  }
+
+  /** Fills one slot with the nearest free adult. Returns them, or null. */
+  assignWorker(id: number): Villager | null {
+    const b = this.buildings.get(id);
+    if (!b || b.state !== 'active') return null;
+    if (b.workers.length >= workerSlots(b)) return null;
+    const [v] = this.availableWorkers(b);
+    if (!v) return null;
+    b.workers.push(v.id);
+    v.workId = b.id;
+    v.profession = BUILDINGS[b.def].profession;
+    v.task = { kind: 'none' };
+    return v;
+  }
+
+  /** Sends a worker back to the pool of general labourers. */
+  unassignWorker(id: number, villagerId: number): void {
+    const b = this.buildings.get(id);
+    if (!b) return;
+    const i = b.workers.indexOf(villagerId);
+    if (i === -1) return;
+    b.workers.splice(i, 1);
+    const v = this.villagerById.get(villagerId);
+    if (!v) return;
+    v.workId = 0;
+    v.profession = 'idle';
+    v.task = { kind: 'none' };
   }
 
   killNode(id: number): void {
@@ -515,7 +586,7 @@ export class World {
   capacityOf(b: Building): number {
     const def = BUILDINGS[b.def];
     if (!def.storage) return 0;
-    return Math.floor(def.storage.capacity * (def.storage.global ? this.modifiers.storage : 1));
+    return Math.floor(storageCapacity(b) * (def.storage.global ? this.modifiers.storage : 1));
   }
 
   usedOf(b: Building): number {
@@ -768,21 +839,23 @@ export class World {
       const def = BUILDINGS[b.def];
       const s = def.service;
       if (!s || s.radius <= 0) continue;
-      const staffed = def.workers > 0 ? clamp01(b.workers.length / def.workers) : 1;
+      const slots = workerSlots(b);
+      const staffed = slots > 0 ? clamp01(b.workers.length / slots) : 1;
       const strength = s.strength * (0.35 + staffed * 0.65);
       if (strength <= 0) continue;
 
-      const minX = Math.max(0, Math.floor((b.cx - s.radius) / cell));
-      const maxX = Math.min(this.serviceW - 1, Math.ceil((b.cx + s.radius) / cell));
-      const minY = Math.max(0, Math.floor((b.cy - s.radius) / cell));
-      const maxY = Math.min(this.serviceH - 1, Math.ceil((b.cy + s.radius) / cell));
+      const radius = serviceRadius(b);
+      const minX = Math.max(0, Math.floor((b.cx - radius) / cell));
+      const maxX = Math.min(this.serviceW - 1, Math.ceil((b.cx + radius) / cell));
+      const minY = Math.max(0, Math.floor((b.cy - radius) / cell));
+      const maxY = Math.min(this.serviceH - 1, Math.ceil((b.cy + radius) / cell));
       for (let gy = minY; gy <= maxY; gy++) {
         for (let gx = minX; gx <= maxX; gx++) {
           const dx = gx * cell - b.cx;
           const dy = gy * cell - b.cy;
           const d2 = dx * dx + dy * dy;
-          if (d2 > s.radius * s.radius) continue;
-          const falloff = 1 - Math.sqrt(d2) / s.radius;
+          if (d2 > radius * radius) continue;
+          const falloff = 1 - Math.sqrt(d2) / radius;
           const value = strength * (0.45 + falloff * 0.55);
           const i = gy * this.serviceW + gx;
           switch (s.kind) {

@@ -4,6 +4,7 @@ import { BUILDINGS } from '../src/data/buildings';
 import { startResearch } from '../src/sim/research';
 import { orderBuy, orderSell } from '../src/sim/economy';
 import { GOODS, ALL_GOOD_IDS } from '../src/data/goods';
+import { workerSlots } from '../src/sim/levels';
 import { RESEARCH, ALL_RESEARCH_IDS } from '../src/data/research';
 
 function run(sim: ReturnType<typeof createNewGame>, seconds: number): void {
@@ -109,7 +110,9 @@ describe('early game loop', () => {
           if (n.kind === 'tree' && n.alive) trees++;
         });
         if (trees < 12) continue;
-        placed = !!w.place('woodcutter_camp', x, y, 0, true);
+        const b = w.place('woodcutter_camp', x, y, 0, true);
+        if (b) while (b.workers.length < workerSlots(b) && w.assignWorker(b.id)) { /* staff it */ }
+        placed = !!b;
       }
     }
     expect(placed).toBe(true);

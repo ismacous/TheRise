@@ -4,6 +4,7 @@ import { BUILDINGS, type NodeKind } from '../data/buildings';
 import { GOODS, type GoodId } from '../data/goods';
 import { FEMALE_NAMES, HAIR_COLORS, MALE_NAMES, SKIN_TONES, SURNAMES } from '../data/names';
 import type { ProfessionId } from '../data/professions';
+import { gatherRadius, outputMultiplier, storageCapacity } from './levels';
 import { gatherYieldFor, workSpeedFor } from './modifiers';
 import { TERRAIN, type Building, type ResourceNode, type Villager } from './types';
 import { DAY_SECONDS, type World } from './world';
@@ -191,8 +192,10 @@ export function moveTowards(
 }
 
 /** Amount a villager carries per trip for a given good. */
-export function carryCapacity(world: World, good: GoodId): number {
-  return Math.max(1, Math.round(GOODS[good].carry * world.modifiers.carryCapacity));
+export function carryCapacity(world: World, good: GoodId, v?: Villager): number {
+  // A storehouse carrier works with a handcart; an unassigned labourer does not.
+  const cart = v && v.profession === 'carrier' ? 1.6 : 1;
+  return Math.max(1, Math.round(GOODS[good].carry * world.modifiers.carryCapacity * cart));
 }
 
 export function buildingInvTotal(b: Building): number {
@@ -202,9 +205,7 @@ export function buildingInvTotal(b: Building): number {
 }
 
 export function buildingSpace(_world: World, b: Building): number {
-  const def = BUILDINGS[b.def];
-  const cap = def.storage ? def.storage.capacity : 0;
-  return cap - buildingInvTotal(b);
+  return storageCapacity(b) - buildingInvTotal(b);
 }
 
 export function depositIntoBuilding(world: World, b: Building, good: GoodId, amount: number): number {
@@ -220,9 +221,10 @@ export function findHarvestNode(world: World, b: Building, v: Villager): Resourc
   const def = BUILDINGS[b.def];
   if (!def.gather) return null;
   const kinds = def.gather.nodes;
+  const radius = gatherRadius(b);
   let best: ResourceNode | null = null;
   let bestScore = Infinity;
-  world.nodeGrid.query(b.cx, b.cy, def.gather.radius, (n) => {
+  world.nodeGrid.query(b.cx, b.cy, radius, (n) => {
     if (!n.alive || n.amount <= 0) return;
     if (!kinds.includes(n.kind)) return;
     if (n.growth < 0.95 && n.kind === 'tree') return;
@@ -233,7 +235,7 @@ export function findHarvestNode(world: World, b: Building, v: Villager): Resourc
     if (n.maxAmount <= 1 && n.claimedBy !== 0 && n.claimedBy !== v.id) return;
     const dxb = n.x - b.cx;
     const dyb = n.y - b.cy;
-    if (dxb * dxb + dyb * dyb > def.gather!.radius * def.gather!.radius) return;
+    if (dxb * dxb + dyb * dyb > radius * radius) return;
     // Prefer nodes near the worker, but keep the camp's own distance in mind
     // so crews spread out instead of all racing to the same tree.
     const dxv = n.x - v.x;
@@ -266,7 +268,7 @@ export function harvestStandPoint(world: World, n: ResourceNode): { x: number; y
 export function yieldFromNode(world: World, b: Building, n: ResourceNode): { good: GoodId; amount: number } {
   const def = BUILDINGS[b.def];
   const g = def.gather!;
-  const mul = gatherYieldFor(world.modifiers, def.profession);
+  const mul = gatherYieldFor(world.modifiers, def.profession) * outputMultiplier(b);
   const entries = Object.entries(g.outputs) as Array<[GoodId, number]>;
   if (entries.length === 0) {
     // Deep mine and other polymorphic extractors take whatever the vein holds.
@@ -281,8 +283,9 @@ export function yieldFromNode(world: World, b: Building, n: ResourceNode): { goo
 export function extraYields(_world: World, b: Building): Array<[GoodId, number]> {
   const g = BUILDINGS[b.def].gather;
   if (!g) return [];
+  const mul = outputMultiplier(b);
   const entries = Object.entries(g.outputs) as Array<[GoodId, number]>;
-  return entries.slice(1).map(([good, amount]) => [good, Math.max(1, Math.round(amount))]);
+  return entries.slice(1).map(([good, amount]) => [good, Math.max(1, Math.round(amount * mul))]);
 }
 
 export function workRate(world: World, v: Villager, profession: ProfessionId): number {

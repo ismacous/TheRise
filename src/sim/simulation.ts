@@ -1,5 +1,5 @@
 import { clamp } from '../core/util';
-import { BUILDINGS, type BuildingId } from '../data/buildings';
+import type { BuildingId } from '../data/buildings';
 import { updateVillager } from './behaviour';
 import { computeTier, updateEconomy } from './economy';
 import { eventFoodMultiplier, updateFires, updateVillageEvents, updateWeather } from './events';
@@ -14,6 +14,7 @@ import {
   updatePopulation,
   updateVillagerNeeds,
 } from './population';
+import { housingCapacity } from './levels';
 import { updateObjectives } from './objectives';
 import { updateResearch } from './research';
 import { NUTRITION_PER_DAY, countFoodVariety, createVillager } from './villagers';
@@ -180,7 +181,7 @@ export function computeStats(w: World): void {
   let housing = 0;
   for (const b of w.buildingList) {
     if (b.state !== 'active') continue;
-    housing += BUILDINGS[b.def].housing?.capacity ?? 0;
+    housing += housingCapacity(b);
   }
 
   const food = w.totalFood();

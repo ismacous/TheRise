@@ -78,6 +78,13 @@ export interface Building {
   state: BuildingState;
   /** Construction progress in work units. */
   buildProgress: number;
+  /**
+   * In-place level, 1 upward. Buildings with a tier chain swap to the next
+   * definition instead; either way the player sees a single "improve" button.
+   */
+  level: number;
+  /** Set while builders are working on an improvement. */
+  upgrade: { toDef: BuildingId | null; toLevel: number; progress: number; total: number } | null;
   /** Materials delivered to the site so far. */
   delivered: Partial<Record<GoodId, number>>;
   /** Local inventory (inputs and outputs). */
