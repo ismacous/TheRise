@@ -26,7 +26,7 @@ const c = (hex: string): Color => new Color(hex).convertSRGBToLinear();
 export const PALETTES: Record<Season, SeasonPalette> = {
   spring: {
     grass: c('#6d9e48'),
-    grassAlt: c('#7cab52'),
+    grassAlt: c('#7fa956'),
     forestFloor: c('#4f7d3c'),
     rock: c('#8d9099'),
     rockAlt: c('#7a7d86'),
@@ -34,7 +34,7 @@ export const PALETTES: Record<Season, SeasonPalette> = {
     dirt: c('#987a54'),
     waterShallow: c('#5aa0b4'),
     waterDeep: c('#2d6480'),
-    foliage: [c('#4f9140'), c('#5aa049'), c('#year'), c('#68a84e')],
+    foliage: [c('#4f9140'), c('#5aa049'), c('#469339'), c('#68a84e')],
     trunk: c('#6b4a2c'),
     sky: c('#8fc4e0'),
     fog: c('#b9d6e4'),
@@ -44,7 +44,7 @@ export const PALETTES: Record<Season, SeasonPalette> = {
   },
   summer: {
     grass: c('#76a84a'),
-    grassAlt: c('#84b155'),
+    grassAlt: c('#86ae5d'),
     forestFloor: c('#4a7a36'),
     rock: c('#93959c'),
     rockAlt: c('#7f828a'),
@@ -62,7 +62,7 @@ export const PALETTES: Record<Season, SeasonPalette> = {
   },
   autumn: {
     grass: c('#94a04c'),
-    grassAlt: c('#a2a854'),
+    grassAlt: c('#a5a860'),
     forestFloor: c('#6e6a36'),
     rock: c('#8a8c92'),
     rockAlt: c('#777a82'),
@@ -80,7 +80,7 @@ export const PALETTES: Record<Season, SeasonPalette> = {
   },
   winter: {
     grass: c('#cdd8dc'),
-    grassAlt: c('#dbe4e7'),
+    grassAlt: c('#dde5e9'),
     forestFloor: c('#a8b6b4'),
     rock: c('#9aa0a6'),
     rockAlt: c('#868c93'),
@@ -97,9 +97,6 @@ export const PALETTES: Record<Season, SeasonPalette> = {
     snow: 1,
   },
 };
-
-// One entry above was mistyped; fix it in a single place.
-PALETTES.spring.foliage[2] = c('#469339');
 
 export function seasonPalette(season: Season): SeasonPalette {
   return PALETTES[season];

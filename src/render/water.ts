@@ -11,7 +11,7 @@ import { WATER_Y } from './constants';
 import type { SeasonPalette } from './palette';
 
 const VERT = /* glsl */ `
-  uniform float uTime;
+  uniform highp float uTime;
   varying vec3 vWorld;
   varying float vWave;
 
@@ -31,11 +31,10 @@ const VERT = /* glsl */ `
 `;
 
 const FRAG = /* glsl */ `
-  precision mediump float;
+  uniform highp float uTime;
   uniform vec3 uShallow;
   uniform vec3 uDeep;
   uniform vec3 uSun;
-  uniform float uTime;
   uniform float uOpacity;
   varying vec3 vWorld;
   varying float vWave;

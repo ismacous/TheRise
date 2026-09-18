@@ -168,8 +168,9 @@ export function updateEconomy(world: World, dt: number): void {
   }
 
   // ── Daily taxes ─────────────────────────────────────────────────────────
+  // Roughly one coin per adult per day at decent morale, scaled by prestige.
   const taxPerSecond =
-    (world.stats.adults * 0.32 * (0.35 + world.stats.happiness / 100) * (1 + (world.stats.tier - 1) * 0.15)) /
+    (world.stats.adults * 1.1 * (0.3 + world.stats.happiness / 100) * (1 + (world.stats.tier - 1) * 0.18)) /
     DAY_SECONDS;
   world.treasury += taxPerSecond * dt;
   world.taxIncomeWindow += taxPerSecond * dt;

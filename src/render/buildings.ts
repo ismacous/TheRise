@@ -76,7 +76,7 @@ function make(defId: BuildingId, state: BuildingState): BuildingVisual {
 
     // ── Housing ──────────────────────────────────────────────────────────
     case 'shack':
-      out.height = buildHut(b, W, D, C.wallWoodDark, C.roofThatch, out, 0.85, true);
+      out.height = buildHut(b, W, D, C.wallWoodDark, C.roofThatch, out, 1.0, true);
       break;
     case 'cottage':
       out.height = buildHut(b, W, D, C.wallPlaster, C.roofThatch, out, 1.0, false);
@@ -300,8 +300,8 @@ function buildHut(
 ): number {
   const w = W - 0.35;
   const d = D - 0.35;
-  const wallH = 0.85 * scale;
-  const roofH = 0.62 * scale;
+  const wallH = 0.92 * scale;
+  const roofH = 0.5 * scale;
   const tilt = crooked ? 0.035 : 0;
   b.boxOn(0, 0, 0, w, wallH, d, wall, tilt);
   // Corner posts read well even at a distance.
@@ -310,7 +310,7 @@ function buildHut(
       b.boxOn((w / 2 - 0.06) * sx, 0, (d / 2 - 0.06) * sz, 0.12, wallH + 0.04, 0.12, C.beam);
     }
   }
-  b.gableRoof(0, wallH, 0, w, d, roofH, roof, 0);
+  b.gableRoof(0, wallH, 0, w, d, roofH, roof, 0, 0.12);
   b.boxOn(0, 0, d / 2 - 0.02, 0.34, wallH * 0.7, 0.08, C.beam);
   out.lights.push({ x: 0, y: wallH * 0.5, z: d / 2, color: new Color('#ffb861'), intensity: 0.6 });
   return wallH + roofH;
@@ -450,16 +450,19 @@ function buildHall(
 ): number {
   const w = W - 0.35;
   const d = D - 0.35;
-  const wallH = 1.3 * scale;
+  const wallH = 1.5 * scale;
   b.boxOn(0, 0, 0, w, wallH, d, wall);
-  b.gableRoof(0, wallH, 0, w, d, 0.8 * scale, roof, 0, 0.24);
-  // Columned porch.
+  // A stone plinth grounds the building instead of letting walls float.
+  b.boxOn(0, 0, 0, w + 0.24, 0.16, d + 0.24, C.wallStoneDark);
+  b.gableRoof(0, wallH, 0, w, d, 0.68 * scale, roof, 0, 0.14);
+  // Porch: two columns carrying the roof overhang, no floating slab.
   for (const sx of [-1, 1]) {
-    b.cylinder(sx * w * 0.28, 0, d / 2 + 0.28, 0.12, wallH * 0.85, 6, C.wallStone);
+    b.cylinder(sx * w * 0.3, 0.16, d / 2 + 0.16, 0.11, wallH - 0.16, 6, C.wallStone);
+    b.cylinder(sx * w * 0.3, wallH - 0.06, d / 2 + 0.16, 0.15, 0.1, 6, C.wallStoneDark);
   }
-  b.box(0, wallH * 0.9, d / 2 + 0.28, w * 0.75, 0.12, 0.6, roof);
-  for (let i = -1; i <= 1; i++) {
-    b.box(i * w * 0.3, wallH * 0.62, d / 2 + 0.002, 0.24, 0.42, 0.03, new Color('#33414a').convertSRGBToLinear());
+  b.boxOn(0, 0.16, d / 2 + 0.02, w * 0.3, wallH * 0.62, 0.1, C.beam);
+  for (let i = -1; i <= 1; i += 2) {
+    b.box(i * w * 0.34, wallH * 0.62, d / 2 + 0.002, 0.26, 0.46, 0.03, new Color('#33414a').convertSRGBToLinear());
   }
   out.lights.push({ x: 0, y: wallH * 0.6, z: d / 2, color: new Color('#ffd28a'), intensity: 1.1 });
   return wallH + 0.8 * scale;
@@ -470,7 +473,7 @@ function buildTownHall(b: MeshBuilder, W: number, D: number, out: BuildingVisual
   const w = W - 0.35;
   const d = D - 0.35;
   // Bell tower.
-  b.boxOn(w / 2 - 0.55, 0, -d / 2 + 0.55, 0.85, 2.9, 0.85, C.wallStone);
+  b.boxOn(w / 2 - 0.55, 0.16, -d / 2 + 0.55, 0.85, 2.9, 0.85, C.wallStone);
   b.boxOn(w / 2 - 0.55, 2.9, -d / 2 + 0.55, 1.0, 0.18, 1.0, C.wallStoneDark);
   b.cone(w / 2 - 0.55, 3.08, -d / 2 + 0.55, 0.62, 0.95, 4, C.roofSlate, Math.PI / 4);
   b.box(w / 2 - 0.55, 4.12, -d / 2 + 0.55, 0.07, 0.35, 0.07, C.metal);
@@ -942,16 +945,24 @@ function buildRuin(b: MeshBuilder, W: number, D: number, defId: BuildingId): voi
   const d = D - 0.4;
   const seed = defId.length;
   b.box(0, -0.03, 0, w + 0.2, 0.08, d + 0.2, C.dirt);
-  // Broken wall segments at varying heights.
-  const heights = [0.55, 0.22, 0.4, 0.15];
-  b.boxOn(-w / 2 + 0.08, 0, 0, 0.16, heights[seed % 4], d * 0.8, C.ruin);
-  b.boxOn(w / 2 - 0.08, 0, d * 0.2, 0.16, heights[(seed + 1) % 4], d * 0.4, C.ruin);
-  b.boxOn(0, 0, -d / 2 + 0.08, w * 0.6, heights[(seed + 2) % 4], 0.16, C.ruin);
-  // Collapsed beams and rubble.
-  b.box(0.2, 0.28, 0.1, 0.09, 0.09, 1.1, C.beam, 0, 0.5, 0.35);
-  b.box(-0.3, 0.16, -0.2, 0.09, 0.09, 0.8, C.beam, 0.7, 0.3, 0);
-  for (let i = 0; i < 4; i++) {
-    const a = (i / 4) * Math.PI * 2 + seed;
-    b.blob(Math.cos(a) * w * 0.28, 0.08, Math.sin(a) * d * 0.28, 0.16, 0.11, 0.15, C.ruin);
+
+  // Standing wall fragments, deliberately uneven so each ruin has a profile.
+  const heights = [0.95, 0.45, 0.72, 0.3];
+  b.boxOn(-w / 2 + 0.1, 0, 0, 0.2, heights[seed % 4], d * 0.85, C.ruin);
+  b.boxOn(w / 2 - 0.1, 0, d * 0.22, 0.2, heights[(seed + 1) % 4], d * 0.42, C.ruin);
+  b.boxOn(0, 0, -d / 2 + 0.1, w * 0.62, heights[(seed + 2) % 4], 0.2, C.ruin);
+  // A lone corner post still upright, the classic silhouette of an abandoned house.
+  b.boxOn(w / 2 - 0.14, 0, -d / 2 + 0.14, 0.15, 1.25, 0.15, C.beam);
+
+  // Collapsed roof beams leaning into the rubble.
+  b.box(0.2, 0.34, 0.1, 0.1, 0.1, 1.3, C.beam, 0, 0.55, 0.35);
+  b.box(-0.3, 0.2, -0.2, 0.1, 0.1, 0.95, C.beam, 0.7, 0.35, 0);
+  b.box(0.05, 0.5, -0.4, 0.09, 0.09, 0.8, C.beam, 1.1, -0.4, 0.2);
+
+  // Scattered stone and rotten thatch.
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2 + seed;
+    b.blob(Math.cos(a) * w * 0.3, 0.09, Math.sin(a) * d * 0.3, 0.18, 0.12, 0.17, C.ruin);
   }
+  b.blob(0, 0.1, d * 0.18, 0.4, 0.09, 0.32, C.roofThatchDark);
 }

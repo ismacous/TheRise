@@ -52,6 +52,13 @@ export class CameraController {
   private rotateMode = false;
   private disposers: Array<() => void> = [];
 
+  /**
+   * While painting (roads), a single-finger drag paints instead of panning.
+   * Two-finger gestures still zoom and orbit as usual.
+   */
+  paintMode = false;
+  onPaintMove: ((clientX: number, clientY: number) => void) | null = null;
+
   /** Notified when the user taps without dragging. */
   onTap: ((clientX: number, clientY: number) => void) | null = null;
   /** Notified on a long press (context actions). */
@@ -169,6 +176,7 @@ export class CameraController {
       this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       this.moved = 0;
       this.dragging = true;
+      if (this.paintMode && this.pointers.size === 1) this.onPaintMove?.(e.clientX, e.clientY);
       this.rotateMode = e.button === 2 || e.shiftKey;
       this.pressStart.set(e.clientX, e.clientY);
       this.pressTimer = 0.55;
@@ -186,6 +194,8 @@ export class CameraController {
 
       if (this.pointers.size >= 2) {
         this.updatePinch();
+      } else if (this.paintMode) {
+        this.onPaintMove?.(e.clientX, e.clientY);
       } else if (this.rotateMode) {
         this.desiredYaw -= dx * 0.006;
         this.desiredPitch = clamp(this.desiredPitch + dy * 0.004, this.limits.minPitch, this.limits.maxPitch);

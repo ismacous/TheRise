@@ -6,6 +6,7 @@ import {
   MeshLambertMaterial,
   Vector3,
 } from 'three';
+import { Rng, ValueNoise2D } from '../core/rng';
 import type { TileMap } from '../sim/tilemap';
 import { TERRAIN } from '../sim/types';
 import { CHUNK, HEIGHT_SCALE } from './constants';
@@ -27,6 +28,8 @@ export class TerrainRenderer {
   private material: MeshLambertMaterial;
   /** Corner heights, (w+1) x (h+1), averaged from tile elevations. */
   private corners: Float32Array;
+  /** Low-frequency tint noise so meadows never look like graph paper. */
+  private tint: ValueNoise2D;
 
   constructor(map: TileMap, palette: SeasonPalette) {
     this.map = map;
@@ -35,6 +38,7 @@ export class TerrainRenderer {
     this.chunksY = Math.ceil(map.height / CHUNK);
     this.corners = new Float32Array((map.width + 1) * (map.height + 1));
     this.material = new MeshLambertMaterial({ vertexColors: true, flatShading: true });
+    this.tint = new ValueNoise2D(new Rng('terrain-tint'));
     this.group.name = 'terrain';
     this.recomputeCorners();
     for (let cy = 0; cy < this.chunksY; cy++) {
@@ -85,20 +89,46 @@ export class TerrainRenderer {
     const t = m.terrain[i];
     const road = m.road[i];
 
+    // Two octaves of smooth noise: broad patches of colour plus a gentle
+    // per-tile break-up. Both are subtle on purpose — a strong per-tile tint
+    // turns the meadow into a chessboard at this camera angle.
+    const broad = this.tint.sample(x * 0.055, y * 0.055);
+    const fine = this.tint.sample(x * 0.34 + 31, y * 0.34 + 17);
+    const mix = broad * 0.7 + fine * 0.3;
+
     let col;
     if (road === 2) col = p.rock;
     else if (road === 1) col = p.dirt;
     else if (t === TERRAIN.WATER) col = p.waterDeep;
     else if (t === TERRAIN.SAND) col = p.sand;
-    else if (t === TERRAIN.ROCK) col = ((x * 7 + y * 13) & 3) === 0 ? p.rockAlt : p.rock;
+    else if (t === TERRAIN.ROCK) col = mix > 0.55 ? p.rockAlt : p.rock;
     else if (t === TERRAIN.FOREST) col = p.forestFloor;
     else if (t === TERRAIN.DIRT) col = p.dirt;
-    else col = ((x * 11 + y * 5) & 3) === 0 ? p.grassAlt : p.grass;
+    else col = p.grass;
 
-    // Cheap hash noise so large flat areas never look like a single sheet.
-    const h = ((x * 374761393 + y * 668265263) ^ 0x5bf03635) >>> 0;
-    const jitter = 0.94 + ((h & 255) / 255) * 0.12;
-    out.set(col.r * jitter, col.g * jitter, col.b * jitter);
+    let r = col.r;
+    let g = col.g;
+    let b = col.b;
+
+    // Blend meadow tones instead of switching between them.
+    if (t === TERRAIN.GRASS && road === 0) {
+      const k = mix * 0.85;
+      r += (p.grassAlt.r - r) * k;
+      g += (p.grassAlt.g - g) * k;
+      b += (p.grassAlt.b - b) * k;
+    }
+
+    // Slopes catch less light in reality; darkening them adds relief that
+    // flat shading alone cannot convey on gentle hills.
+    const slope = Math.min(
+      1,
+      Math.max(
+        Math.abs(m.elevation[i] - m.elevationAt(x + 1, y)),
+        Math.abs(m.elevation[i] - m.elevationAt(x, y + 1)),
+      ) * 0.55,
+    );
+    const shade = (0.965 + mix * 0.07) * (1 - slope * 0.18);
+    out.set(r * shade, g * shade, b * shade);
   }
 
   private buildChunk(cx: number, cy: number, existing?: BufferGeometry): BufferGeometry {

@@ -95,9 +95,15 @@ export function rebuildHaulJobs(world: World): void {
       const used = world.usedOf(b);
       if (used >= cap * 0.85) continue;
       const wanted = marketWishlist(world);
+      // Stalls hold a few days of demand, not the entire reserve: a market that
+      // empties the storehouses makes the whole village look like it is starving.
+      const perGoodCeiling = Math.max(8, Math.round(world.stats.population * 0.9));
       for (const g of wanted) {
         const have = b.inv[g] ?? 0;
-        const perGood = Math.floor((cap / Math.max(3, wanted.length)) * 0.9);
+        const perGood = Math.min(
+          perGoodCeiling,
+          Math.floor((cap / Math.max(3, wanted.length)) * 0.9),
+        );
         const inFlight = countInFlight(jobs, b.id, g);
         if (have + inFlight >= perGood) continue;
         if (world.stockOf(g) <= 2) continue;

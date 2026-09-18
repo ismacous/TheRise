@@ -214,7 +214,11 @@ export class MeshBuilder {
     const slope = Math.atan2(height, depth / 2 + overhang);
     const len = Math.hypot(height, d);
     const thickness = 0.1;
+    // Each slope gets its own shade: without it a gable roof reads as one
+    // flat quad from a three-quarter camera.
+    const shades = [0.84, 1.0];
     for (const sign of [-1, 1]) {
+      const slopeColor = color.clone().multiplyScalar(shades[sign > 0 ? 1 : 0]);
       const px = 0;
       const pz = (sign * d) / 2;
       const py = baseY + height / 2;
@@ -223,7 +227,7 @@ export class MeshBuilder {
       const sin = Math.sin(ry);
       const wx = cx + px * cos - pz * sin;
       const wz = cz + px * sin + pz * cos;
-      this.box(wx, py, wz, w, thickness, len, color, ry, -sign * slope, 0);
+      this.box(wx, py, wz, w, thickness, len, slopeColor, ry, -sign * slope, 0);
     }
     return this;
   }

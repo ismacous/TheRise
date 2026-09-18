@@ -1,0 +1,413 @@
+import { BUILDINGS, type BuildingId } from './data/buildings';
+import { GameRenderer, QUALITY_PRESETS, type RenderQuality } from './render/renderer';
+import { HEIGHT_SCALE } from './render/constants';
+import { createNewGame, type Simulation } from './sim/simulation';
+import { deserialize, readSave, writeSave } from './sim/save';
+import type { World } from './sim/world';
+import type { WorldGenOptions } from './sim/worldgen';
+import type { GameApi, QualityLevel, SheetId } from './ui/api';
+import { UiShell } from './ui/shell';
+
+const AUTOSAVE_INTERVAL = 120;
+
+function detectQuality(): QualityLevel {
+  const mem = (navigator as { deviceMemory?: number }).deviceMemory ?? 4;
+  const cores = navigator.hardwareConcurrency ?? 4;
+  if (mem >= 6 && cores >= 6) return 'high';
+  if (mem >= 3 && cores >= 4) return 'medium';
+  return 'low';
+}
+
+/** Ties the simulation, the renderer and the UI together. */
+export class Game implements GameApi {
+  sim: Simulation;
+  renderer: GameRenderer;
+  ui: UiShell;
+
+  speed = 1;
+  private lastSpeed = 1;
+  placementId: BuildingId | null = null;
+  placementRotation = 0;
+  painting = false;
+  selectedBuildingId: number | null = null;
+  selectedVillagerId: number | null = null;
+  openSheetId: SheetId | null = null;
+  quality: QualityLevel;
+  showDebug = false;
+
+  private canvas: HTMLCanvasElement;
+  private genOptions: Partial<WorldGenOptions>;
+  private running = false;
+  private lastTime = 0;
+  private fpsSamples: number[] = [];
+  private autosaveTimer = AUTOSAVE_INTERVAL;
+  private paintedThisDrag = new Set<number>();
+  /** Last pointer position, so the placement ghost tracks the finger. */
+  private pointerX = -1;
+  private pointerY = -1;
+
+  constructor(canvas: HTMLCanvasElement, uiRoot: HTMLElement, sim: Simulation, gen: Partial<WorldGenOptions>) {
+    this.canvas = canvas;
+    this.sim = sim;
+    this.genOptions = gen;
+    this.quality = detectQuality();
+    this.renderer = new GameRenderer(canvas, sim.world, QUALITY_PRESETS[this.quality]);
+    this.ui = new UiShell(uiRoot, this);
+    this.wireInput();
+    this.wireLifecycle();
+  }
+
+  get world(): World {
+    return this.sim.world;
+  }
+
+  // ── Input ───────────────────────────────────────────────────────────────
+  private wireInput(): void {
+    const controls = this.renderer.controls;
+    controls.onTap = (x, y) => this.handleTap(x, y);
+    controls.onPaintMove = (x, y) => this.handlePaint(x, y);
+
+    window.addEventListener('resize', () => this.renderer.resize());
+    window.addEventListener('orientationchange', () => setTimeout(() => this.renderer.resize(), 220));
+    window.addEventListener('keydown', (e) => this.handleKey(e));
+    this.canvas.addEventListener('pointerup', () => this.paintedThisDrag.clear());
+    const trackPointer = (e: PointerEvent): void => {
+      this.pointerX = e.clientX;
+      this.pointerY = e.clientY;
+    };
+    this.canvas.addEventListener('pointerdown', trackPointer);
+    this.canvas.addEventListener('pointermove', trackPointer);
+  }
+
+  private handleKey(e: KeyboardEvent): void {
+    switch (e.key) {
+      case ' ':
+        e.preventDefault();
+        this.togglePause();
+        break;
+      case '1':
+        this.setSpeed(1);
+        break;
+      case '2':
+        this.setSpeed(2);
+        break;
+      case '3':
+        this.setSpeed(4);
+        break;
+      case 'r':
+        this.rotatePlacement();
+        break;
+      case 'Escape':
+        if (this.placementId) this.cancelPlacement();
+        else this.closeSheet();
+        break;
+      case 'b':
+        this.openSheet('build');
+        break;
+      case 'F3':
+        e.preventDefault();
+        this.showDebug = !this.showDebug;
+        break;
+    }
+  }
+
+  private handleTap(clientX: number, clientY: number): void {
+    const hit = this.renderer.pickGround(clientX, clientY);
+    if (!hit) return;
+    const tx = Math.floor(hit.x);
+    const ty = Math.floor(hit.z);
+
+    if (this.placementId) {
+      this.tryPlace(tx, ty);
+      return;
+    }
+
+    // Villagers first: they are small and the player is aiming at them.
+    const villager = this.world.villagers.find(
+      (v) => (v.x - hit.x) ** 2 + (v.y - hit.z) ** 2 < 0.55,
+    );
+    if (villager) {
+      this.selectVillager(villager.id);
+      return;
+    }
+
+    const building = this.world.buildingAt(tx, ty);
+    if (building) {
+      this.selectBuilding(building.id);
+    } else {
+      this.selectBuilding(null);
+      this.selectVillager(null);
+      if (this.openSheetId === 'building') this.closeSheet();
+    }
+  }
+
+  private handlePaint(clientX: number, clientY: number): void {
+    if (!this.placementId) return;
+    const def = BUILDINGS[this.placementId];
+    if (def.placement.kind !== 'paint') return;
+    const hit = this.renderer.pickGround(clientX, clientY);
+    if (!hit) return;
+    const tx = Math.floor(hit.x);
+    const ty = Math.floor(hit.z);
+    const key = ty * this.world.map.width + tx;
+    if (this.paintedThisDrag.has(key)) return;
+    this.paintedThisDrag.add(key);
+    this.world.place(this.placementId, tx, ty);
+  }
+
+  private tryPlace(tx: number, ty: number): void {
+    const id = this.placementId!;
+    const def = BUILDINGS[id];
+    const [w, h] = this.world.footprint(id, this.placementRotation);
+    // Centre the footprint on the tap so the ghost matches what appears.
+    const x = tx - Math.floor((w - 1) / 2);
+    const y = ty - Math.floor((h - 1) / 2);
+
+    const check = this.world.canPlace(id, x, y, this.placementRotation);
+    if (!check.ok) {
+      this.world.notify(check.reason, '🚫', 'bad');
+      return;
+    }
+    if (this.world.treasury < def.goldCost) {
+      this.world.notify("Pas assez d'or", '🪙', 'bad');
+      return;
+    }
+    const b = this.world.place(id, x, y, this.placementRotation);
+    if (b) {
+      this.selectBuilding(b.id);
+      if (!this.painting) this.cancelPlacement();
+    }
+  }
+
+  // ── GameApi ─────────────────────────────────────────────────────────────
+  setSpeed(speed: number): void {
+    if (speed > 0) this.lastSpeed = speed;
+    this.speed = speed;
+    this.sim.speed = speed;
+  }
+
+  togglePause(): void {
+    this.setSpeed(this.speed === 0 ? this.lastSpeed : 0);
+  }
+
+  beginPlacement(id: BuildingId): void {
+    this.placementId = id;
+    this.placementRotation = 0;
+    this.painting = BUILDINGS[id].placement.kind === 'paint';
+    this.renderer.controls.paintMode = this.painting;
+    this.paintedThisDrag.clear();
+    this.requestUiRefresh();
+  }
+
+  rotatePlacement(): void {
+    if (!this.placementId) return;
+    this.placementRotation = (this.placementRotation + 1) % 4;
+  }
+
+  cancelPlacement(): void {
+    this.placementId = null;
+    this.painting = false;
+    this.renderer.controls.paintMode = false;
+    this.renderer.ghost.hide();
+    this.requestUiRefresh();
+  }
+
+  selectBuilding(id: number | null): void {
+    this.selectedBuildingId = id;
+    if (id !== null) {
+      this.selectedVillagerId = null;
+      this.openSheet('building');
+    }
+    this.requestUiRefresh();
+  }
+
+  selectVillager(id: number | null): void {
+    this.selectedVillagerId = id;
+    if (id !== null) {
+      this.selectedBuildingId = null;
+      const v = this.world.villagerById.get(id);
+      if (v) {
+        const prof = v.profession;
+        this.world.notify(`${v.name} ${v.surname} — ${prof}`, '👤', 'neutral');
+      }
+    }
+    this.requestUiRefresh();
+  }
+
+  focusOn(x: number, y: number, distance?: number): void {
+    this.renderer.controls.focusOn(x, y, distance);
+  }
+
+  openSheet(id: SheetId): void {
+    this.openSheetId = id;
+    this.ui.openSheet(id);
+  }
+
+  closeSheet(): void {
+    this.openSheetId = null;
+    this.ui.closeSheet();
+  }
+
+  requestUiRefresh(): void {
+    this.ui.markSheetDirty();
+  }
+
+  async save(): Promise<void> {
+    try {
+      await writeSave(this.sim, this.genOptions);
+      this.world.notify('Partie sauvegardée', '💾', 'good');
+    } catch (err) {
+      console.error(err);
+      this.world.notify('Échec de la sauvegarde', '⚠️', 'bad');
+    }
+  }
+
+  async load(): Promise<boolean> {
+    const data = await readSave();
+    if (!data) {
+      this.world.notify('Aucune sauvegarde trouvée', '📂', 'bad');
+      return false;
+    }
+    try {
+      const sim = deserialize(data);
+      this.replaceSimulation(sim, data.gen);
+      this.world.notify('Partie chargée', '📂', 'good');
+      return true;
+    } catch (err) {
+      console.error(err);
+      this.world.notify('Sauvegarde illisible', '⚠️', 'bad');
+      return false;
+    }
+  }
+
+  async hasSave(): Promise<boolean> {
+    return (await readSave()) !== null;
+  }
+
+  restart(seed?: string): void {
+    const gen = { ...this.genOptions, seed: seed ?? `vallee-${Math.floor(Math.random() * 1e9)}` };
+    const sim = createNewGame(gen);
+    this.replaceSimulation(sim, gen);
+  }
+
+  private replaceSimulation(sim: Simulation, gen: Partial<WorldGenOptions>): void {
+    const uiRoot = document.getElementById('ui-root')!;
+    this.renderer.dispose();
+    this.sim = sim;
+    this.genOptions = gen;
+    this.sim.speed = this.speed;
+    this.selectedBuildingId = null;
+    this.selectedVillagerId = null;
+    this.cancelPlacement();
+    this.renderer = new GameRenderer(this.canvas, sim.world, QUALITY_PRESETS[this.quality]);
+    this.ui = new UiShell(uiRoot, this);
+    this.wireInput();
+    this.closeSheet();
+  }
+
+  setQuality(q: QualityLevel): void {
+    this.quality = q;
+    const preset: RenderQuality = QUALITY_PRESETS[q];
+    this.renderer.setQuality(preset);
+  }
+
+  // ── Loop ────────────────────────────────────────────────────────────────
+  start(): void {
+    if (this.running) return;
+    this.running = true;
+    this.lastTime = performance.now();
+    const frame = (now: number): void => {
+      if (!this.running) return;
+      const dt = Math.min(0.1, (now - this.lastTime) / 1000);
+      this.lastTime = now;
+      this.tick(dt);
+      requestAnimationFrame(frame);
+    };
+    requestAnimationFrame(frame);
+  }
+
+  stop(): void {
+    this.running = false;
+  }
+
+  private tick(dt: number): void {
+    this.sim.update(dt);
+    this.renderer.update(dt);
+    this.updateSelectionMarkers();
+    this.updateGhost();
+    this.renderer.render();
+
+    this.fpsSamples.push(1 / Math.max(0.0001, dt));
+    if (this.fpsSamples.length > 30) this.fpsSamples.shift();
+    const fps = this.fpsSamples.reduce((a, b) => a + b, 0) / this.fpsSamples.length;
+    this.ui.update(dt, this.renderer.frameMs, fps);
+
+    if (this.speed > 0) {
+      this.autosaveTimer -= dt;
+      if (this.autosaveTimer <= 0) {
+        this.autosaveTimer = AUTOSAVE_INTERVAL;
+        void writeSave(this.sim, this.genOptions).catch(() => undefined);
+      }
+    }
+  }
+
+  private updateSelectionMarkers(): void {
+    const markers = this.renderer.markers;
+    markers.hide();
+    if (this.selectedBuildingId !== null) {
+      const b = this.world.buildings.get(this.selectedBuildingId);
+      if (b) {
+        const y = this.world.map.footprintElevation(b.x, b.y, b.w, b.h) * HEIGHT_SCALE;
+        markers.showSelection(b.cx, y, b.cy, Math.max(b.w, b.h) * 0.75);
+        const service = BUILDINGS[b.def].service;
+        const gather = BUILDINGS[b.def].gather;
+        const radius = service && service.radius > 0 ? service.radius : gather?.radius;
+        if (radius) markers.showRadius(b.cx, y, b.cy, radius);
+      } else {
+        this.selectedBuildingId = null;
+      }
+    } else if (this.selectedVillagerId !== null) {
+      const v = this.world.villagerById.get(this.selectedVillagerId);
+      if (v) {
+        markers.showSelection(v.x, this.renderer.groundHeight(v.x, v.y), v.y, 0.5);
+      } else {
+        this.selectedVillagerId = null;
+      }
+    }
+  }
+
+  private updateGhost(): void {
+    if (!this.placementId) return;
+    const controls = this.renderer.controls;
+    // The ghost tracks the finger, falling back to the screen centre before
+    // the player has touched the map.
+    const rect = this.canvas.getBoundingClientRect();
+    const px = this.pointerX >= 0 ? this.pointerX : rect.left + rect.width / 2;
+    const py = this.pointerY >= 0 ? this.pointerY : rect.top + rect.height / 2;
+    const hit = controls.screenToGround(px, py);
+    if (!hit) {
+      this.renderer.ghost.hide();
+      return;
+    }
+    const id = this.placementId;
+    const [w, h] = this.world.footprint(id, this.placementRotation);
+    const x = Math.floor(hit.x) - Math.floor((w - 1) / 2);
+    const y = Math.floor(hit.z) - Math.floor((h - 1) / 2);
+    const check = this.world.canPlace(id, x, y, this.placementRotation);
+    const cx = x + w / 2;
+    const cy = y + h / 2;
+    const groundY = this.world.map.footprintElevation(x, y, w, h) * HEIGHT_SCALE;
+    this.renderer.ghost.show(id, cx, groundY, cy, this.placementRotation, check.ok);
+  }
+
+  private wireLifecycle(): void {
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        void writeSave(this.sim, this.genOptions).catch(() => undefined);
+      }
+    });
+    window.addEventListener('pagehide', () => {
+      void writeSave(this.sim, this.genOptions).catch(() => undefined);
+    });
+  }
+}

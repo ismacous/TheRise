@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Adaptive icon foreground: a gabled hall with a bell tower, drawn inside the
+  central 72dp safe zone of the 108dp canvas.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Roof -->
+    <path
+        android:fillColor="#B5543C"
+        android:pathData="M54,26 L82,52 L26,52 Z" />
+    <!-- Hall body -->
+    <path
+        android:fillColor="#E4DAC4"
+        android:pathData="M31,52 L77,52 L77,80 L31,80 Z" />
+    <!-- Door -->
+    <path
+        android:fillColor="#6B4A2C"
+        android:pathData="M49,62 L59,62 L59,80 L49,80 Z" />
+    <!-- Bell tower -->
+    <path
+        android:fillColor="#9AA0A6"
+        android:pathData="M64,40 L76,40 L76,80 L64,80 Z" />
+    <path
+        android:fillColor="#D9B45F"
+        android:pathData="M70,28 L79,40 L61,40 Z" />
+    <!-- Ground line -->
+    <path
+        android:fillColor="#D9B45F"
+        android:pathData="M22,80 L86,80 L86,85 L22,85 Z" />
+</vector>

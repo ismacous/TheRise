@@ -2,6 +2,7 @@ import { clamp } from '../core/util';
 import { BUILDINGS } from '../data/buildings';
 import { GOODS, type GoodId } from '../data/goods';
 import {
+  SATIETY_PER_NUTRITION,
   buildingSpace,
   carryCapacity,
   clearTask,
@@ -176,15 +177,18 @@ function claimHaulJob(world: World, v: Villager) {
   let bestScore = Infinity;
   for (const job of world.haulJobs) {
     if (job.claimedBy !== 0) continue;
-    const to = world.buildings.get(job.toId);
-    if (!to) continue;
-    const from = job.fromId === -1 ? world.findStoreWith(job.good, v.x, v.y) : world.buildings.get(job.fromId);
+    // Either end may be "any storehouse"; resolve both before judging distance.
+    const from =
+      job.fromId === -1 ? world.findStoreWith(job.good, v.x, v.y) : world.buildings.get(job.fromId);
     if (!from) continue;
+    const to =
+      job.toId === -1 ? world.findStoreForDeposit(job.good, from.cx, from.cy) : world.buildings.get(job.toId);
+    if (!to) continue;
     const d = (from.cx - v.x) ** 2 + (from.cy - v.y) ** 2;
     const score = d - job.priority * 900;
     if (score < bestScore) {
       bestScore = score;
-      best = { ...job, fromId: from.id };
+      best = { ...job, fromId: from.id, toId: to.id };
       best.claimedBy = v.id;
       job.claimedBy = v.id;
     }
@@ -214,7 +218,10 @@ function doHarvest(world: World, v: Villager, dt: number): void {
     // Choose a node and walk to it.
     if (!v.task.nodeId) {
       // Refuse to work when the camp is full or consumables are missing.
-      if (buildingSpace(world, b) < 6) {
+      // Safety valve: if the porters cannot keep up, the gatherer runs a load
+      // to the storehouse himself rather than downing tools.
+      const capacity = BUILDINGS[b.def].storage?.capacity ?? 0;
+      if (buildingSpace(world, b) < Math.max(6, capacity * 0.4)) {
         b.stall = 'Stock plein';
         v.task = { kind: 'haul', fromId: b.id, toId: -1, phase: 0, good: dominantGood(b) ?? undefined };
         if (!v.task.good) {
@@ -274,16 +281,12 @@ function doHarvest(world: World, v: Villager, dt: number): void {
 
     v.work = 0;
     const out = yieldFromNode(world, b, node);
-    const taken = Math.min(out.amount, Math.max(1, node.amount));
-    node.amount -= g.fells ? node.maxAmount : taken;
-    if (node.amount <= 0 || g.fells) {
-      if (node.kind === 'wild_animal' || g.fells) {
-        world.killNode(node.id);
-      } else {
-        node.alive = false;
-        world.killNode(node.id);
-      }
-    }
+    // A felled tree or a downed animal gives its whole yield: the node's own
+    // "amount" is a stock counter for veins and bushes, not a per-trip cap.
+    const consumedWhole = g.fells === true || node.maxAmount <= 1;
+    const taken = consumedWhole ? out.amount : Math.min(out.amount, node.amount);
+    node.amount -= consumedWhole ? node.maxAmount : taken;
+    if (consumedWhole || node.amount <= 0) world.killNode(node.id);
     node.claimedBy = 0;
     v.carrying = out.good;
     v.carryAmount = taken;
@@ -564,7 +567,7 @@ function doEat(world: World, v: Villager, dt: number): void {
     }
     b.inv[good] = (b.inv[good] ?? 0) - 1;
     if (b.inv[good]! <= 0) delete b.inv[good];
-    v.satiety = Math.min(100, v.satiety + GOODS[good].nutrition * 22);
+    v.satiety = Math.min(100, v.satiety + GOODS[good].nutrition * SATIETY_PER_NUTRITION);
     v.state = 'eating';
     if (v.satiety > 72) clearTask(v);
   }

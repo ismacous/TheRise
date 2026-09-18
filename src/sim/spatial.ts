@@ -34,6 +34,18 @@ export class SpatialGrid<T extends { x: number; y: number }> {
     arr.push(item);
   }
 
+  /** Removes an item from its cell. Cheap because cells stay small. */
+  remove(item: T): boolean {
+    const k = this.key(Math.floor(item.x / this.cellSize), Math.floor(item.y / this.cellSize));
+    const arr = this.cells.get(k);
+    if (!arr) return false;
+    const i = arr.indexOf(item);
+    if (i === -1) return false;
+    arr.splice(i, 1);
+    if (arr.length === 0) this.cells.delete(k);
+    return true;
+  }
+
   rebuild(items: Iterable<T>): void {
     this.clear();
     for (const it of items) this.insert(it);

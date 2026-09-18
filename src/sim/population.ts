@@ -18,13 +18,13 @@ import type { World } from './world';
 function employmentPriority(world: World, b: Building): number {
   const def = BUILDINGS[b.def];
   const base: Record<BuildingCategory, number> = {
-    civic: 6,
-    storage: 7,
-    gathering: 5,
-    farming: 5,
-    industry: 4,
-    crafting: 3,
-    service: 4,
+    gathering: 8,
+    farming: 8,
+    industry: 7,
+    storage: 6,
+    crafting: 5,
+    service: 5,
+    civic: 4,
     housing: 0,
     infrastructure: 0,
   };
@@ -37,6 +37,21 @@ function employmentPriority(world: World, b: Building): number {
   // Buildings that are starved of input do not need more idle hands.
   if (b.stall && b.stall.startsWith('Manque')) p -= 3;
   return p;
+}
+
+/**
+ * Share of the adult workforce allowed to be carriers. Storehouses offer far
+ * more porter slots than a young village should fill: without this cap the
+ * first ten villagers all become porters and nothing is ever produced.
+ */
+function carrierBudget(world: World): number {
+  return Math.max(1, Math.round(world.stats.adults * 0.25));
+}
+
+function countCarriers(world: World): number {
+  let n = 0;
+  for (const v of world.villagers) if (v.profession === 'carrier') n++;
+  return n;
 }
 
 export function updateEmployment(world: World): void {
@@ -55,23 +70,43 @@ export function updateEmployment(world: World): void {
     }
   }
 
+  const carrierCap = carrierBudget(world);
+  let carriers = countCarriers(world);
+
   const openings: Array<{ b: Building; priority: number }> = [];
   for (const b of world.buildingList) {
     if (b.state !== 'active' || !b.enabled) continue;
     const def = BUILDINGS[b.def];
     if (def.workers <= 0) continue;
     if (b.workers.length >= def.workers) continue;
+    if (def.profession === 'carrier' && carriers >= carrierCap) continue;
     openings.push({ b, priority: employmentPriority(world, b) });
   }
   if (openings.length === 0) return;
   openings.sort((a, z) => z.priority - a.priority);
 
   const free = world.villagers.filter((v) => canWork(v) && v.workId === 0);
-  if (free.length === 0) return;
+
+  // Nobody idle but something important is unstaffed: take a worker off the
+  // least useful job rather than leaving a bakery empty forever.
+  if (free.length === 0) {
+    const top = openings[0];
+    const donor = lowestPriorityWorker(world, top.priority);
+    if (!donor) return;
+    const from = world.buildings.get(donor.workId)!;
+    const i = from.workers.indexOf(donor.id);
+    if (i !== -1) from.workers.splice(i, 1);
+    donor.workId = 0;
+    donor.profession = 'idle';
+    donor.task = { kind: 'none' };
+    free.push(donor);
+  }
 
   for (const { b } of openings) {
     const def = BUILDINGS[b.def];
+    if (def.profession === 'carrier' && carriers >= carrierCap) continue;
     while (b.workers.length < def.workers && free.length > 0) {
+      if (def.profession === 'carrier' && carriers >= carrierCap) break;
       // Nearest idle adult to the workplace.
       let bestIdx = 0;
       let bestD = Infinity;
@@ -87,9 +122,27 @@ export function updateEmployment(world: World): void {
       v.workId = b.id;
       v.profession = def.profession;
       v.task = { kind: 'none' };
+      if (def.profession === 'carrier') carriers++;
     }
     if (free.length === 0) break;
   }
+}
+
+/** The worker doing the least urgent job, if it is clearly less urgent. */
+function lowestPriorityWorker(world: World, wantedPriority: number): Villager | null {
+  let worst: Villager | null = null;
+  let worstPriority = wantedPriority - 2;
+  for (const v of world.villagers) {
+    if (!v.workId || !canWork(v)) continue;
+    const b = world.buildings.get(v.workId);
+    if (!b) continue;
+    const p = employmentPriority(world, b);
+    if (p < worstPriority) {
+      worstPriority = p;
+      worst = v;
+    }
+  }
+  return worst;
 }
 
 export function updateHousing(world: World): void {
@@ -234,8 +287,9 @@ export function updatePopulation(world: World, dt: number): PopulationOutcome {
       v.happiness > 45 &&
       v.satiety > 45
     ) {
-      // Roughly one birth per eligible mother every ~40 game days at high morale.
-      const p = 0.00012 * dt * (v.happiness / 100) * (cap > pop + 2 ? 1 : 0.2);
+      // Roughly one child per mother every eight game days at high morale,
+      // slowing sharply when there are no spare beds.
+      const p = 0.0016 * dt * (v.happiness / 100) * (cap > pop + 2 ? 1 : 0.2);
       if (world.rng.next() < p) v.pregnant = 2.5;
     }
   }
@@ -273,8 +327,8 @@ export function updateImmigration(world: World, dt: number): void {
   const s = world.stats;
   if (s.housingCapacity - s.population < 2) return;
   if (s.happiness < 48 || s.foodDays < 6) return;
-  const attractiveness = ((s.happiness - 45) / 55) * (1 + s.tier * 0.25);
-  const p = 0.0009 * dt * attractiveness;
+  const attractiveness = clamp((s.happiness - 40) / 30, 0, 1.6) * (1 + (s.tier - 1) * 0.2);
+  const p = 0.012 * dt * attractiveness;
   if (world.rng.next() >= p) return;
 
   const hall = world.buildingList.find((b) => b.def === 'town_hall');

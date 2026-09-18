@@ -6,7 +6,7 @@ import { FEMALE_NAMES, HAIR_COLORS, MALE_NAMES, SKIN_TONES, SURNAMES } from '../
 import type { ProfessionId } from '../data/professions';
 import { gatherYieldFor, workSpeedFor } from './modifiers';
 import { TERRAIN, type Building, type ResourceNode, type Villager } from './types';
-import type { World } from './world';
+import { DAY_SECONDS, type World } from './world';
 
 export const ADULT_AGE = 14;
 export const OLD_AGE = 62;
@@ -335,10 +335,19 @@ export function releaseNode(world: World, v: Villager): void {
   }
 }
 
+/** Satiety points a villager burns per game day. */
+export const SATIETY_PER_DAY = 40;
+/** Satiety restored per unit of nutrition eaten. */
+export const SATIETY_PER_NUTRITION = 22;
+/**
+ * Nutrition one villager needs per day. A loaf of bread (3 nutrition) therefore
+ * feeds someone for about a day and a half.
+ */
+export const NUTRITION_PER_DAY = SATIETY_PER_DAY / SATIETY_PER_NUTRITION;
+
 export function satietyDecayPerSecond(world: World): number {
-  // A villager empties a full belly in roughly two and a half days.
-  const winter = world.time.season === 'winter' ? 1.2 : 1;
-  return (100 / (2.5 * 120)) * winter * world.modifiers.foodUpkeep * world.foodUpkeepEvent;
+  const winter = world.time.season === 'winter' ? 1.25 : 1;
+  return (SATIETY_PER_DAY / DAY_SECONDS) * winter * world.modifiers.foodUpkeep * world.foodUpkeepEvent;
 }
 
 export const clampHappiness = (h: number): number => clamp01(h / 100) * 100;

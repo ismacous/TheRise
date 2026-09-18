@@ -20,7 +20,7 @@ describe('world generation', () => {
 
     let trees = 0;
     w.nodeGrid.query(w.startX, w.startY, 30, (n) => {
-      if (n.kind === 'tree') trees++;
+      if (n.kind === 'tree' && n.alive) trees++;
     });
     expect(trees).toBeGreaterThan(20);
   });
@@ -106,7 +106,7 @@ describe('early game loop', () => {
         if (!w.canPlace('woodcutter_camp', x, y).ok) continue;
         let trees = 0;
         w.nodeGrid.query(x, y, 12, (n) => {
-          if (n.kind === 'tree') trees++;
+          if (n.kind === 'tree' && n.alive) trees++;
         });
         if (trees < 12) continue;
         placed = !!w.place('woodcutter_camp', x, y, 0, true);

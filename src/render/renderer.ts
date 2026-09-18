@@ -39,6 +39,9 @@ export const QUALITY_PRESETS: Record<'low' | 'medium' | 'high', RenderQuality> =
   high: { shadows: true, shadowMapSize: 2048, pixelRatio: 2, weather: true, particles: true },
 };
 
+/** Three's physical lighting units, relative to the pre-r155 behaviour. */
+const LIGHT_SCALE = Math.PI;
+
 const NIGHT_SKY = new Color('#12203a').convertSRGBToLinear();
 const DUSK_SKY = new Color('#e4926a').convertSRGBToLinear();
 const NIGHT_AMBIENT = new Color('#2f4468').convertSRGBToLinear();
@@ -87,7 +90,7 @@ export class GameRenderer {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, quality.pixelRatio));
     this.renderer.outputColorSpace = SRGBColorSpace;
     this.renderer.toneMapping = ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.05;
+    this.renderer.toneMappingExposure = 1.15;
     this.renderer.shadowMap.enabled = quality.shadows;
     this.renderer.shadowMap.type = PCFSoftShadowMap;
 
@@ -101,9 +104,12 @@ export class GameRenderer {
     this.props = new PropRenderer(world, this.palette);
     this.water = new WaterRenderer(world.map, this.palette);
 
-    this.hemi = new HemisphereLight(0xbcd8f0, 0x5a6a4a, 0.55);
-    this.ambient = new AmbientLight(0xffffff, 0.35);
-    this.sun = new DirectionalLight(0xfff3dc, 1.5);
+    // Three r155+ interprets light intensity in physical units, so the values
+    // below are the "legacy" ones scaled by PI. Without this the valley reads
+    // almost black at noon.
+    this.hemi = new HemisphereLight(0xbcd8f0, 0x5a6a4a, 0.55 * LIGHT_SCALE);
+    this.ambient = new AmbientLight(0xffffff, 0.35 * LIGHT_SCALE);
+    this.sun = new DirectionalLight(0xfff3dc, 1.5 * LIGHT_SCALE);
     this.sun.castShadow = quality.shadows;
     this.sun.shadow.mapSize.set(quality.shadowMapSize, quality.shadowMapSize);
     this.sun.shadow.camera.near = 1;
@@ -125,7 +131,7 @@ export class GameRenderer {
     );
     if (quality.weather) this.scene.add(this.weather.points);
 
-    this.controls.snapTo(world.startX, world.startY, 30);
+    this.controls.snapTo(world.startX, world.startY, 38);
     this.resize();
   }
 
@@ -232,8 +238,11 @@ export class GameRenderer {
     this.sun.target.position.copy(target);
     this.sun.target.updateMatrixWorld();
 
-    // Tighten the shadow frustum around what the player can actually see.
-    const shadowSpan = clamp(this.controls.distance * 0.85, 18, 70);
+    // The shadow frustum must cover everything the camera can see, or the
+    // ground outside it samples the depth texture border and reads as shadow.
+    const halfFov = (this.controls.camera.fov * Math.PI) / 360;
+    const visible = this.controls.distance * Math.tan(halfFov) * (1 + this.controls.camera.aspect);
+    const shadowSpan = clamp(visible * 0.95 + 8, 26, 110);
     const cam = this.sun.shadow.camera;
     cam.left = -shadowSpan;
     cam.right = shadowSpan;
@@ -246,11 +255,11 @@ export class GameRenderer {
     const dusk = clamp01(1 - Math.abs(daylight - 0.35) * 3.2) * clamp01(daylight * 3);
     const sunColor = p.sunColor.clone().lerp(DUSK_SKY, dusk * 0.7);
     this.sun.color.copy(sunColor);
-    this.sun.intensity = lerp(0.12, 1.65, daylight);
+    this.sun.intensity = lerp(0.10, 1.55, daylight) * LIGHT_SCALE;
 
     const rainDim = 1 - this.world.wetness * 0.35;
-    this.hemi.intensity = lerp(0.18, 0.62, daylight) * rainDim;
-    this.ambient.intensity = lerp(0.22, 0.4, daylight) * rainDim;
+    this.hemi.intensity = lerp(0.22, 0.6, daylight) * rainDim * LIGHT_SCALE;
+    this.ambient.intensity = lerp(0.26, 0.42, daylight) * rainDim * LIGHT_SCALE;
     this.ambient.color.copy(p.ambient).lerp(NIGHT_AMBIENT, 1 - daylight);
 
     const sky = (this.scene.background as Color) ?? new Color();

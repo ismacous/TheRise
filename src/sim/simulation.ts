@@ -1,6 +1,5 @@
 import { clamp } from '../core/util';
 import { BUILDINGS, type BuildingId } from '../data/buildings';
-import { FOOD_GOODS, GOODS } from '../data/goods';
 import { updateVillager } from './behaviour';
 import { computeTier, updateEconomy } from './economy';
 import { eventFoodMultiplier, updateFires, updateVillageEvents, updateWeather } from './events';
@@ -15,7 +14,7 @@ import {
   updateVillagerNeeds,
 } from './population';
 import { updateResearch } from './research';
-import { createVillager } from './villagers';
+import { NUTRITION_PER_DAY, createVillager } from './villagers';
 import { DAYS_PER_SEASON, DAY_SECONDS, World } from './world';
 import { SEASONS, type Season } from './types';
 import type { WorldGenOptions } from './worldgen';
@@ -165,10 +164,8 @@ export function computeStats(w: World): void {
     housing += BUILDINGS[b.def].housing?.capacity ?? 0;
   }
 
-  let food = 0;
-  for (const g of FOOD_GOODS) food += (w.stock[g] ?? 0) * GOODS[g].nutrition;
-  // A villager burns roughly 40 nutrition per day at baseline.
-  const dailyNeed = Math.max(1, pop * 40 * w.modifiers.foodUpkeep * w.foodUpkeepEvent);
+  const food = w.totalFood();
+  const dailyNeed = Math.max(0.5, pop * NUTRITION_PER_DAY * w.modifiers.foodUpkeep * w.foodUpkeepEvent);
 
   w.stats.population = pop;
   w.stats.adults = adults;
@@ -198,22 +195,36 @@ export function createNewGame(opts: NewGameOptions = {}): Simulation {
 
   w.treasury = opts.startingGold ?? 140;
 
+  // Clear a small glade so the first buildings have somewhere to go. The felled
+  // timber goes straight into the stores, which doubles as the opening tutorial.
+  let salvagedLogs = 0;
+  for (const node of [...w.nodes.values()]) {
+    if (node.kind !== 'tree') continue;
+    const d2 = (node.x - sx) ** 2 + (node.y - sy) ** 2;
+    if (d2 > 90) continue;
+    salvagedLogs++;
+    w.killNode(node.id);
+  }
+
   // The town hall is the anchor; everything else is the player's doing.
   const hall = w.place('town_hall', sx - 2, sy - 2, 0, true);
   const hallX = hall ? hall.cx : sx;
   const hallY = hall ? hall.cy : sy;
 
   placeNear(w, 'storehouse', hallX + 5, hallY, true);
+  // Two salvaged shelters: enough to start, nowhere near enough to grow.
+  placeNear(w, 'shack', hallX - 5, hallY + 3, true);
+  placeNear(w, 'shack', hallX - 5, hallY - 3, true);
 
   // The abandoned village the player has come to rebuild.
   scatterRuins(w, hallX, hallY);
 
   // Starting stock: enough to raise the first camps, not enough to coast.
-  w.addToStock('logs', 60);
-  w.addToStock('planks', 20);
-  w.addToStock('stone', 20);
-  w.addToStock('berries', 40);
-  w.addToStock('bread', 15);
+  w.addToStock('logs', 70 + Math.min(40, salvagedLogs));
+  w.addToStock('planks', 24);
+  w.addToStock('stone', 24);
+  w.addToStock('berries', 70);
+  w.addToStock('bread', 30);
   w.refreshStockCache();
 
   const count = opts.startingVillagers ?? 8;

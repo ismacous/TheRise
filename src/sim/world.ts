@@ -2,7 +2,7 @@ import { Emitter } from '../core/emitter';
 import { Rng } from '../core/rng';
 import { clamp, clamp01 } from '../core/util';
 import { BUILDINGS, type BuildingId, type NodeKind } from '../data/buildings';
-import { FOOD_GOODS, GOODS, type GoodId } from '../data/goods';
+import { GOODS, type GoodId } from '../data/goods';
 import { generateWorld, type WorldGenOptions } from './worldgen';
 import { PathFinder } from './pathfinding';
 import { SpatialGrid } from './spatial';
@@ -369,6 +369,82 @@ export class World {
     this.emitter.emit('buildingDestroyed', b);
   }
 
+  /** Can this building be replaced by its next tier right now? */
+  canUpgrade(b: Building): PlacementCheck {
+    const def = BUILDINGS[b.def];
+    const nextId = def.upgradesTo;
+    if (!nextId) return { ok: false, reason: 'Amélioration maximale' };
+    const next = BUILDINGS[nextId];
+    if (next.requires && !this.research.completed.has(next.requires)) {
+      return { ok: false, reason: 'Recherche manquante' };
+    }
+    if (b.state !== 'active') return { ok: false, reason: 'Bâtiment non actif' };
+    if (this.treasury < next.goldCost) return { ok: false, reason: "Pas assez d'or" };
+    for (const [g, amt] of Object.entries(next.cost)) {
+      if (this.stockOf(g as GoodId) < (amt as number)) {
+        return { ok: false, reason: `Manque ${GOODS[g as GoodId].name}` };
+      }
+    }
+    const [nw, nh] = this.footprint(nextId, b.rotation);
+    const nx = b.x - Math.floor((nw - b.w) / 2);
+    const ny = b.y - Math.floor((nh - b.h) / 2);
+    // Free our own tiles so the footprint test only sees genuine obstacles.
+    this.map.setOccupancy(b.x, b.y, b.w, b.h, -1);
+    const check = this.canPlace(nextId, nx, ny, b.rotation);
+    this.map.setOccupancy(b.x, b.y, b.w, b.h, b.id);
+    if (!check.ok) return { ok: false, reason: `Pas assez de place (${check.reason.toLowerCase()})` };
+    return { ok: true, reason: '' };
+  }
+
+  /**
+   * Replaces a building by its next tier, carrying over staff, residents and
+   * stock. Materials are consumed immediately: an upgrade is instant, which
+   * keeps the loop satisfying rather than fiddly.
+   */
+  upgrade(id: number): Building | null {
+    const b = this.buildings.get(id);
+    if (!b) return null;
+    const check = this.canUpgrade(b);
+    if (!check.ok) return null;
+    const nextId = BUILDINGS[b.def].upgradesTo!;
+    const next = BUILDINGS[nextId];
+    for (const [g, amt] of Object.entries(next.cost)) this.takeFromStock(g as GoodId, amt as number);
+
+    const [nw, nh] = this.footprint(nextId, b.rotation);
+    const nx = b.x - Math.floor((nw - b.w) / 2);
+    const ny = b.y - Math.floor((nh - b.h) / 2);
+    const workers = [...b.workers];
+    const residents = [...b.residents];
+    const inv = { ...b.inv };
+    const rotation = b.rotation;
+
+    this.removeBuilding(id, false);
+    const created = this.place(nextId, nx, ny, rotation, true);
+    if (!created) {
+      // Should not happen after canUpgrade, but never silently lose a building.
+      const restored = this.place(b.def, b.x, b.y, rotation, true);
+      if (restored) restored.inv = inv;
+      return null;
+    }
+    created.inv = inv;
+    for (const vid of workers) {
+      const v = this.villagerById.get(vid);
+      if (!v || created.workers.length >= next.workers) break;
+      created.workers.push(vid);
+      v.workId = created.id;
+      v.profession = next.profession;
+      v.task = { kind: 'none' };
+    }
+    for (const vid of residents) {
+      const v = this.villagerById.get(vid);
+      if (!v || !next.housing || created.residents.length >= next.housing.capacity) break;
+      created.residents.push(vid);
+      v.homeId = created.id;
+    }
+    this.notify(`${next.name} : amélioration terminée`, '⬆️', 'good', created.cx, created.cy);
+    return created;
+  }
+
   killNode(id: number): void {
     const n = this.nodes.get(id);
     if (!n) return;
@@ -379,6 +455,9 @@ export class World {
       this.map.blocker[k] = -1;
     }
     this.nodes.delete(id);
+    // Drop it from the spatial index too, or searches keep tripping over
+    // felled trees and workers report "nothing in range" beside a full forest.
+    this.nodeGrid.remove(n);
   }
 
   addNode(node: ResourceNode): void {
@@ -528,9 +607,23 @@ export class World {
     return best;
   }
 
+  /**
+   * Nutrition held anywhere villagers can reach it. Markets deliberately pull
+   * food out of the storehouses, so counting global stock alone would report a
+   * famine every time a market filled its stalls.
+   */
   totalFood(): number {
     let n = 0;
-    for (const g of FOOD_GOODS) n += (this.stock[g] ?? 0) * GOODS[g].nutrition;
+    for (const b of this.buildingList) {
+      if (b.state !== 'active') continue;
+      const def = BUILDINGS[b.def];
+      const reachable = def.storage?.global || def.service?.kind === 'market';
+      if (!reachable) continue;
+      for (const [g, amount] of Object.entries(b.inv)) {
+        const nutrition = GOODS[g as GoodId].nutrition;
+        if (nutrition > 0) n += (amount as number) * nutrition;
+      }
+    }
     return n;
   }
 

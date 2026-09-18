@@ -95,7 +95,7 @@ export function generateWorld(opts: Partial<WorldGenOptions> = {}): GeneratedWor
         t = TERRAIN.SAND;
       } else if (e > 5.2 + (1 - moisture) * 2.2) {
         t = TERRAIN.ROCK;
-      } else if (moisture > 0.62 - o.forestDensity * 0.22 && e < 6.5) {
+      } else if (moisture > 0.56 - o.forestDensity * 0.3 && e < 7.2) {
         t = TERRAIN.FOREST;
       }
       map.terrain[i] = t;
@@ -136,19 +136,19 @@ export function generateWorld(opts: Partial<WorldGenOptions> = {}): GeneratedWor
 
       // Trees: dense in forest, scattered on grass.
       if (t === TERRAIN.FOREST) {
-        if (rng.chance(0.34 * (0.6 + o.forestDensity * 0.7))) {
+        if (rng.chance(0.46 * (0.6 + o.forestDensity * 0.7))) {
           add('tree', x, y, 1, rng.int(0, 3));
           map.blocker[i] = nodes[nodes.length - 1].id;
           continue;
         }
-      } else if (t === TERRAIN.GRASS && rng.chance(0.022 * o.forestDensity)) {
+      } else if (t === TERRAIN.GRASS && rng.chance(0.035 * o.forestDensity)) {
         add('tree', x, y, 1, rng.int(0, 3));
         map.blocker[i] = nodes[nodes.length - 1].id;
         continue;
       }
 
       // Berry bushes cluster on forest edges.
-      if ((t === TERRAIN.FOREST || t === TERRAIN.GRASS) && rng.chance(0.012)) {
+      if ((t === TERRAIN.FOREST || t === TERRAIN.GRASS) && rng.chance(0.018)) {
         add('berry_bush', x, y, 40, rng.int(0, 1));
         continue;
       }
@@ -388,21 +388,33 @@ function findStartLocation(map: TileMap, rng: Rng): { x: number; y: number } {
     const y = rng.int(Math.floor(H * 0.2), Math.floor(H * 0.8));
     if (!map.canPlace(x, y, 8, 8, 0.9)) continue;
 
+    // Count the immediate building area separately from the surroundings: the
+    // player wants a clearing to build in, with woods and water close by.
     let trees = 0;
     let water = 0;
-    let flat = 0;
-    for (let j = -14; j <= 14; j += 2) {
-      for (let i = -14; i <= 14; i += 2) {
+    let open = 0;
+    let coreForest = 0;
+    for (let j = -16; j <= 16; j += 2) {
+      for (let i = -16; i <= 16; i += 2) {
         const px = x + i;
         const py = y + j;
         if (!map.inBounds(px, py)) continue;
         const t = map.terrain[map.idx(px, py)];
-        if (t === TERRAIN.FOREST) trees++;
+        const core = Math.abs(i) <= 8 && Math.abs(j) <= 8;
+        if (t === TERRAIN.FOREST) {
+          trees++;
+          if (core) coreForest++;
+        }
         if (t === TERRAIN.WATER) water++;
-        if (t === TERRAIN.GRASS) flat++;
+        if (t === TERRAIN.GRASS && core) open++;
       }
     }
-    const score = flat * 1.0 + trees * 1.4 + Math.min(water, 25) * 1.6 - Math.abs(water - 18) * 0.3;
+    const score =
+      open * 2.2 +
+      Math.min(trees, 60) * 0.9 +
+      Math.min(water, 22) * 1.5 -
+      coreForest * 1.8 -
+      Math.abs(water - 16) * 0.25;
     if (score > best.score) best = { x, y, score };
   }
   return { x: best.x, y: best.y };
