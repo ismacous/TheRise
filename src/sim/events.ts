@@ -85,19 +85,29 @@ export function updateFires(world: World, dt: number): void {
     if (world.rng.next() < p) igniteBuilding(world, b);
   }
 
-  // Burning.
+  // Burning. Villagers douse fires during their own update, which runs before
+  // this pass, so the extinction test needs an epsilon: comparing against zero
+  // exactly left buildings smouldering forever at the growth rate added below.
+  const OUT = 0.05;
   for (const b of world.buildingList) {
     if (b.state !== 'burning') continue;
     const protection = world.fireProtectionAt(b.cx, b.cy);
     const spreadRate = 0.019 * (world.weather === 'rain' ? 0.45 : 1) * (1 / (1 + protection * 0.5));
+
+    if (b.fire <= OUT) {
+      b.state = 'active';
+      b.fire = 0;
+      world.notify(`Incendie maîtrisé : ${BUILDINGS[b.def].name}`, '💧', 'good', b.cx, b.cy);
+      continue;
+    }
     b.fire = clamp(b.fire + spreadRate * dt, 0, 1);
 
-    // Spread to close neighbours.
-    if (world.rng.chance(dt * 0.05 * b.fire)) {
+    // Only a well-established blaze throws sparks at its neighbours.
+    if (b.fire > 0.35 && world.rng.chance(dt * 0.04 * b.fire)) {
       for (const other of world.buildingList) {
         if (other === b || other.state !== 'active') continue;
         const d2 = (other.cx - b.cx) ** 2 + (other.cy - b.cy) ** 2;
-        if (d2 < 36 && BUILDINGS[other.def].fireRisk > 0 && world.rng.chance(0.35)) {
+        if (d2 < 30 && BUILDINGS[other.def].fireRisk > 0 && world.rng.chance(0.3)) {
           igniteBuilding(world, other);
           break;
         }
@@ -107,10 +117,6 @@ export function updateFires(world: World, dt: number): void {
     if (b.fire >= 1) {
       world.notify(`${BUILDINGS[b.def].name} détruit par les flammes`, '🔥', 'bad', b.cx, b.cy);
       world.removeBuilding(b.id, false);
-    } else if (b.fire <= 0) {
-      b.state = 'active';
-      b.fire = 0;
-      world.notify(`Incendie maîtrisé : ${BUILDINGS[b.def].name}`, '💧', 'good', b.cx, b.cy);
     }
   }
 
@@ -142,7 +148,8 @@ function dispatchFirefighters(world: World): void {
     for (const v of world.villagers) {
       if (v.task.kind === 'douse' && v.task.targetId === b.id) assigned++;
     }
-    const want = 5;
+    // A bigger blaze pulls in more hands.
+    const want = b.fire > 0.5 ? 7 : 5;
     if (assigned >= want) continue;
     // Wardens first, then anyone close enough to matter.
     const candidates = world.villagers
@@ -151,7 +158,7 @@ function dispatchFirefighters(world: World): void {
         v,
         d: (v.x - b.cx) ** 2 + (v.y - b.cy) ** 2 - (v.profession === 'firewarden' ? 6000 : 0),
       }))
-      .filter((c) => c.d < 900)
+      .filter((c) => c.d < 1600)
       .sort((a, z) => a.d - z.d);
     for (const c of candidates.slice(0, want - assigned)) {
       c.v.task = { kind: 'douse', targetId: b.id, phase: 0 };

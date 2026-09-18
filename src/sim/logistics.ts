@@ -12,9 +12,28 @@ export const outputGoods = currentOutputs;
 /** Goods a building consumes (and therefore wants delivered). */
 export const inputGoods = currentInputs;
 
+/**
+ * Adds a job, resolving any "-1" endpoint (meaning "whichever storehouse
+ * suits") to a concrete building straight away. Resolving lazily meant every
+ * idle villager re-scanned every storehouse for every job, every tick.
+ */
 function push(world: World, jobs: HaulJob[], j: Omit<HaulJob, 'id' | 'claimedBy'>): void {
   if (jobs.length >= MAX_JOBS) return;
-  jobs.push({ ...j, id: world.allocJobId(), claimedBy: 0 });
+  let { fromId, toId } = j;
+  if (fromId === -1) {
+    const anchor = toId === -1 ? null : world.buildings.get(toId);
+    const store = world.findStoreWith(j.good, anchor?.cx ?? world.startX, anchor?.cy ?? world.startY);
+    if (!store) return;
+    fromId = store.id;
+  }
+  if (toId === -1) {
+    const anchor = world.buildings.get(fromId);
+    const store = world.findStoreForDeposit(j.good, anchor?.cx ?? world.startX, anchor?.cy ?? world.startY);
+    if (!store) return;
+    toId = store.id;
+  }
+  if (fromId === toId) return;
+  jobs.push({ ...j, fromId, toId, id: world.allocJobId(), claimedBy: 0 });
 }
 
 /**
@@ -128,6 +147,9 @@ export function rebuildHaulJobs(world: World): void {
   }
 
   world.haulJobs = jobs;
+  world.constructionSites = world.buildingList.filter(
+    (b) => b.state === 'planned' || b.state === 'building',
+  );
 }
 
 function countInFlight(jobs: HaulJob[], toId: number, good: GoodId): number {

@@ -16,7 +16,7 @@ import {
 } from './population';
 import { updateObjectives } from './objectives';
 import { updateResearch } from './research';
-import { NUTRITION_PER_DAY, createVillager } from './villagers';
+import { NUTRITION_PER_DAY, countFoodVariety, createVillager } from './villagers';
 import { DAYS_PER_SEASON, DAY_SECONDS, World } from './world';
 import { SEASONS, type Season } from './types';
 import type { WorldGenOptions } from './worldgen';
@@ -33,6 +33,7 @@ export class Simulation {
   private jobTimer = 0;
   private employmentTimer = 0;
   private statsTimer = 0;
+  private serviceTimer = 0;
   private incomeTimer = 0;
   private lastTierNotified = 1;
 
@@ -60,6 +61,8 @@ export class Simulation {
 
   tick(dt: number): void {
     const w = this.world;
+    w.tickCount++;
+    w.pathfinder.beginTick();
 
     advanceTime(w, dt);
     updateWeather(w, dt);
@@ -76,6 +79,11 @@ export class Simulation {
       this.employmentTimer = 2.2;
       updateEmployment(w);
       updateHousing(w);
+    }
+    this.serviceTimer -= dt;
+    if (this.serviceTimer <= 0) {
+      this.serviceTimer = 1;
+      w.rebuildServiceFields();
     }
 
     for (const v of w.villagers) {
@@ -98,6 +106,7 @@ export class Simulation {
     if (this.statsTimer <= 0) {
       this.statsTimer = 0.5;
       w.refreshStockCache();
+      w.foodVariety = countFoodVariety(w);
       computeStats(w);
       updateObjectives(w);
       const tier = computeTier(w);
@@ -194,6 +203,7 @@ export interface NewGameOptions extends Partial<WorldGenOptions> {
 export function createNewGame(opts: NewGameOptions = {}): Simulation {
   const sim = new Simulation(opts);
   const w = sim.world;
+  w.rebuildServiceFields();
   const sx = w.startX;
   const sy = w.startY;
 

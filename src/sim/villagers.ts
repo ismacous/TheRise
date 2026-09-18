@@ -49,6 +49,7 @@ export function createVillager(world: World, x: number, y: number, age: number, 
     path: null,
     pathIndex: 0,
     pathCooldown: 0,
+    taskCooldown: 0,
     targetX: x,
     targetY: y,
     carrying: null,
@@ -62,6 +63,7 @@ export function createVillager(world: World, x: number, y: number, age: number, 
     phase: rng.range(0, Math.PI * 2),
     idleFor: 0,
     pregnant: 0,
+    happinessTarget: 60,
   };
   world.villagers.push(v);
   world.villagerById.set(v.id, v);
@@ -117,10 +119,15 @@ export function moveTowards(
     (distSq > 36 || !world.pathfinder.straightWalkable(v.x, v.y, tx, ty));
 
   if (needsPath && v.pathCooldown <= 0) {
-    v.pathCooldown = 0.45 + world.rng.next() * 0.3;
-    const p = world.pathfinder.find(v.x, v.y, tx, ty, 1.5);
-    v.path = p && p.length > 0 ? p : null;
-    v.pathIndex = 0;
+    if (world.pathfinder.budget > 0) {
+      v.pathCooldown = 0.45 + world.rng.next() * 0.3;
+      const p = world.pathfinder.find(v.x, v.y, tx, ty, 1.5);
+      v.path = p && p.length > 0 ? p : null;
+      v.pathIndex = 0;
+    } else {
+      // No search slot this tick: keep walking straight and try again shortly.
+      v.pathCooldown = 0.05 + world.rng.next() * 0.1;
+    }
   }
 
   let goalX = tx;
@@ -281,8 +288,7 @@ export function wanderTarget(world: World, v: Villager, rng: Rng): { x: number; 
 export function happinessTarget(world: World, v: Villager): number {
   let h = 42 + world.modifiers.happiness;
   // Food quality: eating a varied diet matters more than raw calories.
-  const variety = countFoodVariety(world);
-  h += Math.min(14, variety * 3.5);
+  h += Math.min(14, world.foodVariety * 3.5);
   if (v.satiety > 70) h += 10;
   else if (v.satiety < 30) h -= 22;
   else if (v.satiety < 50) h -= 8;
@@ -306,7 +312,8 @@ export function happinessTarget(world: World, v: Villager): number {
   return clamp(h, 0, 100);
 }
 
-function countFoodVariety(world: World): number {
+/** Recomputed once per stats pass rather than per villager per tick. */
+export function countFoodVariety(world: World): number {
   let n = 0;
   for (const g of ['bread', 'meat', 'fish', 'smoked_fish', 'berries', 'eggs'] as GoodId[]) {
     if ((world.stock[g] ?? 0) > 5) n++;

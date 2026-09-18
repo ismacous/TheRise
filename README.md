@@ -132,12 +132,29 @@ Voir [`docs/DESIGN.md`](docs/DESIGN.md) pour le détail des systèmes et
 
 ## Performances
 
-Mesuré à 412 × 915 en device pixel ratio 2, avec un rendu logiciel (donc
-largement pessimiste par rapport à un vrai téléphone) :
+Mesuré en headless à 412 × 915 en device pixel ratio 2. Le rendu y est
+logiciel (SwiftShader), donc les chiffres GPU sont très pessimistes par
+rapport à un vrai téléphone ; les chiffres CPU, eux, sont représentatifs.
 
-- ~30 draw calls, ~85 000 triangles pour un village de départ
-- 4 draw calls pour toute la population, quelle qu'en soit la taille
-- terrain et végétation découpés en chunks, reconstruits par budget
+| Village | Simulation | Draw calls | Triangles |
+|---|---|---|---|
+| Départ (10 habitants, 11 bâtiments) | 0,08 ms / tick | ~30 | ~85 000 |
+| Cité (410 habitants, 251 bâtiments) | **1,1 ms / tick** | 187 | ~180 000 |
 
-Trois niveaux de qualité sont détectés automatiquement et modifiables dans les
+La simulation tourne à 10 ticks par seconde : une cité de 410 habitants coûte
+donc environ 1 % d'un cœur à vitesse normale, et 4 % en accéléré ×4.
+
+Quatre optimisations portent l'essentiel de ce résultat :
+
+- la couverture des services est précalculée sur une grille grossière une fois
+  par seconde, au lieu d'être évaluée pour chaque villageois à chaque tick ;
+- le bonheur de chaque villageois se recalcule sur un dixième des ticks ;
+- les tâches de transport résolvent leur entrepôt à la création, plus à chaque
+  consultation ;
+- les recherches de chemin sont plafonnées par tick et étalées sur plusieurs
+  images — invisible en jeu, les villageois continuant d'avancer en ligne
+  droite en attendant leur tour.
+
+Toute la population coûte quatre draw calls quel qu'en soit l'effectif. Trois
+niveaux de qualité sont détectés automatiquement et modifiables dans les
 options.

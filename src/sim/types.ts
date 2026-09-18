@@ -104,6 +104,9 @@ export interface Building {
   herd: number;
   /** Last reason the building could not work, for the UI. */
   stall: string | null;
+  /** Cached walkable "door" tile, invalidated when the layout changes. */
+  entrance?: { x: number; y: number };
+  entranceVersion?: number;
 }
 
 export type VillagerState =
@@ -165,6 +168,8 @@ export interface Villager {
   path: Int32Array | null;
   pathIndex: number;
   pathCooldown: number;
+  /** Back-off before an idle villager rescans the job board. */
+  taskCooldown: number;
   targetX: number;
   targetY: number;
   carrying: GoodId | null;
@@ -184,6 +189,11 @@ export interface Villager {
   /** Seconds since last successful job assignment, drives idle chatter. */
   idleFor: number;
   pregnant: number;
+  /**
+   * Happiness is an expensive score, so it is recomputed on a stagger and
+   * merely damped toward on the ticks in between.
+   */
+  happinessTarget: number;
 }
 
 export interface HaulJob {

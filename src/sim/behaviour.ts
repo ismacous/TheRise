@@ -17,7 +17,7 @@ import {
   yieldFromNode,
 } from './villagers';
 import { activeRecipe } from './recipes';
-import { TERRAIN, type Building, type Villager } from './types';
+import { TERRAIN, type Building, type HaulJob, type Villager } from './types';
 import type { World } from './world';
 
 const NIGHT_START = 0.9;
@@ -29,6 +29,7 @@ export function isNight(dayFraction: number): boolean {
 
 /** One villager, one simulation step. */
 export function updateVillager(world: World, v: Villager, dt: number): void {
+  if (v.taskCooldown > 0) v.taskCooldown -= dt;
   if (v.profession === 'child') {
     updateChild(world, v, dt);
     return;
@@ -95,6 +96,12 @@ function updateChild(world: World, v: Villager, dt: number): void {
 
 function pickTask(world: World, v: Villager): void {
   v.idleFor += 0.1;
+  // Re-scanning the job board every tick for a villager that has nothing to do
+  // is pure waste; back off and try again shortly.
+  if (v.taskCooldown > 0) {
+    v.state = 'idle';
+    return;
+  }
   const work = v.workId ? world.buildings.get(v.workId) : null;
 
   if (work && work.state === 'active' && work.enabled) {
@@ -138,13 +145,15 @@ function pickTask(world: World, v: Villager): void {
     v.idleFor = 0;
   } else {
     v.state = 'idle';
+    v.taskCooldown = 0.4 + world.rng.next() * 0.4;
   }
 }
 
 function findConstructionSite(world: World, v: Villager): Building | null {
+  if (world.constructionSites.length === 0) return null;
   let best: Building | null = null;
   let bestD = Infinity;
-  for (const b of world.buildingList) {
+  for (const b of world.constructionSites) {
     if (b.state !== 'planned' && b.state !== 'building') continue;
     if (!hasAllMaterials(world, b)) continue;
     const builders = countBuildersOn(world, b.id);
@@ -172,33 +181,22 @@ export function hasAllMaterials(_world: World, b: Building): boolean {
   return true;
 }
 
+/** Picks the nearest useful unclaimed job. Endpoints are already resolved. */
 function claimHaulJob(world: World, v: Villager) {
-  let best = null;
+  let best: HaulJob | null = null;
   let bestScore = Infinity;
   for (const job of world.haulJobs) {
     if (job.claimedBy !== 0) continue;
-    // Either end may be "any storehouse"; resolve both before judging distance.
-    const from =
-      job.fromId === -1 ? world.findStoreWith(job.good, v.x, v.y) : world.buildings.get(job.fromId);
+    const from = world.buildings.get(job.fromId);
     if (!from) continue;
-    const to =
-      job.toId === -1 ? world.findStoreForDeposit(job.good, from.cx, from.cy) : world.buildings.get(job.toId);
-    if (!to) continue;
     const d = (from.cx - v.x) ** 2 + (from.cy - v.y) ** 2;
     const score = d - job.priority * 900;
     if (score < bestScore) {
       bestScore = score;
-      best = { ...job, fromId: from.id, toId: to.id };
-      best.claimedBy = v.id;
-      job.claimedBy = v.id;
+      best = job;
     }
   }
-  if (best) {
-    // Only one job may stay claimed; release any others we grabbed while scanning.
-    for (const job of world.haulJobs) {
-      if (job.claimedBy === v.id && job.id !== best.id) job.claimedBy = 0;
-    }
-  }
+  if (best) best.claimedBy = v.id;
   return best;
 }
 
@@ -645,7 +643,8 @@ function doDouse(world: World, v: Villager, dt: number): void {
   const e = world.entranceOf(b);
   if (moveTowards(world, v, dt, e.x, e.y, 1.6)) {
     v.state = 'working';
-    const strength = v.profession === 'firewarden' ? 0.16 : 0.055;
+    // Comfortably faster than the fire grows, so a crew always wins eventually.
+    const strength = v.profession === 'firewarden' ? 0.2 : 0.07;
     b.fire = Math.max(0, b.fire - strength * dt);
   }
 }

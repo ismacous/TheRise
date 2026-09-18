@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { BuildingId, NodeKind } from '../src/data/buildings';
 import { computeStats, createNewGame, type Simulation } from '../src/sim/simulation';
 import { World } from '../src/sim/world';
+import { igniteBuilding } from '../src/sim/events';
 import { createVillager } from '../src/sim/villagers';
 
 function run(sim: Simulation, seconds: number): void {
@@ -116,5 +117,32 @@ describe('long run stability', () => {
       for (const id of b.workers) expect(w.villagerById.has(id)).toBe(true);
       for (const id of b.residents) expect(w.villagerById.has(id)).toBe(true);
     }
+  });
+});
+
+describe('fire', () => {
+  it('is put out rather than smouldering forever', () => {
+    const sim = createNewGame({ seed: 'fire' });
+    const w = sim.world;
+    const hut = placeNear(w, 'gatherer_hut');
+    expect(hut).toBeTruthy();
+    igniteBuilding(w, hut!);
+    expect(hut!.state).toBe('burning');
+    run(sim, 180);
+    // Either the villagers saved it or it burned down — never stuck in between.
+    const still = w.buildings.get(hut!.id);
+    expect(still === undefined || still.state !== 'burning').toBe(true);
+  });
+
+  it('does not cascade through the whole village', () => {
+    const sim = createNewGame({ seed: 'cascade' });
+    const w = sim.world;
+    for (let i = 0; i < 6; i++) placeNear(w, 'shack');
+    const before = w.buildingList.length;
+    const victim = w.buildingList.find((b) => b.def === 'shack' && b.state === 'active')!;
+    igniteBuilding(w, victim);
+    run(sim, 600);
+    // Losing one or two buildings is a setback; losing the village is a bug.
+    expect(w.buildingList.length).toBeGreaterThan(before - 4);
   });
 });

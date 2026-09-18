@@ -71,6 +71,16 @@ export class PathFinder {
   /** Diagnostics for the perf overlay. */
   lastExpanded = 0;
   searches = 0;
+  /**
+   * Searches allowed in the current tick. A village of four hundred people
+   * asks for hundreds of paths a second; spreading them over a few ticks is
+   * invisible in play (villagers keep walking straight meanwhile) and keeps
+   * the frame budget predictable.
+   */
+  budget = 0;
+  budgetPerTick = 14;
+  /** Requests refused this tick, for diagnostics. */
+  deferred = 0;
 
   constructor(map: TileMap) {
     this.map = map;
@@ -95,7 +105,17 @@ export class PathFinder {
    *
    * `goalRadius` lets a caller path "next to" a blocked tile such as a tree.
    */
+  /** Called once per simulation tick to replenish the search allowance. */
+  beginTick(): void {
+    this.budget = this.budgetPerTick;
+  }
+
   find(sx: number, sy: number, gx: number, gy: number, goalRadius = 0): Int32Array | null {
+    if (this.budget <= 0) {
+      this.deferred++;
+      return null;
+    }
+    this.budget--;
     const map = this.map;
     sx = Math.floor(sx);
     sy = Math.floor(sy);

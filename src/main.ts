@@ -69,8 +69,19 @@ async function boot(): Promise<void> {
   setBoot(1, 'Prêt');
   setTimeout(hideBoot, 260);
 
-  // Expose for debugging from the device console.
-  (window as unknown as { game: Game }).game = game;
+  // Exposed for the device console and for the headless test harness: the
+  // catalogues and a few constructors, so a session can be driven from script.
+  const debugApi = {
+    game,
+    BUILDINGS: (await import('./data/buildings')).BUILDINGS,
+    RESEARCH: (await import('./data/research')).RESEARCH,
+    GOODS: (await import('./data/goods')).GOODS,
+    createVillager: (await import('./sim/villagers')).createVillager,
+  };
+  Object.assign(window as unknown as Record<string, unknown>, {
+    game,
+    theRise: debugApi,
+  });
 }
 
 boot().catch((err: unknown) => {

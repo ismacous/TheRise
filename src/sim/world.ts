@@ -65,6 +65,8 @@ export class World {
   villagerById = new Map<number, Villager>();
 
   haulJobs: HaulJob[] = [];
+  /** Refreshed with the haul board; saves scanning every building per villager. */
+  constructionSites: Building[] = [];
 
   time: GameTime = { elapsed: 0, day: 1, dayFraction: 0.35, season: 'spring', year: 1 };
   weather: WeatherKind = 'clear';
@@ -98,6 +100,25 @@ export class World {
   comfortPool = 0;
   /** Extra food consumption multiplier from active events. */
   foodUpkeepEvent = 1;
+  /** Number of distinct foods in stock; drives the diet happiness bonus. */
+  foodVariety = 1;
+  /** Ticks elapsed, used to stagger expensive per-villager work. */
+  tickCount = 0;
+
+  /**
+   * Coarse service coverage fields, rebuilt once a second. Evaluating every
+   * building for every villager every tick was the single largest cost in the
+   * simulation once a village passed a couple of hundred souls.
+   */
+  private serviceCell = 4;
+  private serviceW = 0;
+  private serviceH = 0;
+  private happinessField = new Float32Array(0);
+  private fireField = new Float32Array(0);
+  /** Bumped whenever the layout changes, invalidating cached entrances. */
+  layoutVersion = 1;
+  private cachedGlobalStores: Building[] = [];
+  private cachedStoresVersion = -1;
 
   /**
    * Change queues drained by the renderer each frame. Keeping them here means
@@ -155,6 +176,11 @@ export class World {
     this.rebuildNodeGrid();
 
     for (const p of TRADE_PARTNERS) this.partners.set(p.id, createPartnerRuntime(p));
+
+    this.serviceW = Math.ceil(this.map.width / this.serviceCell) + 1;
+    this.serviceH = Math.ceil(this.map.height / this.serviceCell) + 1;
+    this.happinessField = new Float32Array(this.serviceW * this.serviceH);
+    this.fireField = new Float32Array(this.serviceW * this.serviceH);
   }
 
   // ── ids ──────────────────────────────────────────────────────────────────
@@ -277,6 +303,7 @@ export class World {
       this.map.road[i] = def.id === 'cobbled_road' ? 2 : 1;
       if (def.id === 'cobbled_road') this.takeFromStock('stone', 1);
       this.terrainChanges.push({ x, y, w: 1, h: 1 });
+      this.layoutVersion++;
       return null;
     }
 
@@ -330,6 +357,7 @@ export class World {
     this.map.setOccupancy(x, y, w, h, b.id);
     this.buildings.set(b.id, b);
     this.buildingList.push(b);
+    this.layoutVersion++;
     this.rebuildBuildingGrid();
     this.emitter.emit('buildingPlaced', b);
     if (b.state === 'active') this.emitter.emit('buildingCompleted', b);
@@ -367,6 +395,7 @@ export class World {
     const i = this.buildingList.indexOf(b);
     if (i !== -1) this.buildingList.splice(i, 1);
     this.haulJobs = this.haulJobs.filter((j) => j.fromId !== id && j.toId !== id);
+    this.layoutVersion++;
     this.rebuildBuildingGrid();
     this.emitter.emit('buildingDestroyed', b);
   }
@@ -475,11 +504,14 @@ export class World {
 
   // ── storage ──────────────────────────────────────────────────────────────
   globalStores(): Building[] {
+    if (this.cachedStoresVersion === this.layoutVersion) return this.cachedGlobalStores;
     const out: Building[] = [];
     for (const b of this.buildingList) {
       const def = BUILDINGS[b.def];
       if (def.storage?.global && b.state === 'active') out.push(b);
     }
+    this.cachedGlobalStores = out;
+    this.cachedStoresVersion = this.layoutVersion;
     return out;
   }
 
@@ -638,6 +670,14 @@ export class World {
 
   /** Free walkable tile adjacent to a building, used as its "door". */
   entranceOf(b: Building): { x: number; y: number } {
+    if (b.entrance && b.entranceVersion === this.layoutVersion) return b.entrance;
+    const found = this.computeEntrance(b);
+    b.entrance = found;
+    b.entranceVersion = this.layoutVersion;
+    return found;
+  }
+
+  private computeEntrance(b: Building): { x: number; y: number } {
     const candidates: Array<[number, number]> = [];
     for (let i = b.x - 1; i <= b.x + b.w; i++) {
       candidates.push([i, b.y - 1], [i, b.y + b.h]);
@@ -685,6 +725,71 @@ export class World {
     return clamp01(Math.sin((f - 0.16) * Math.PI / 0.74) * 1.15);
   }
 
+  /**
+   * Splats every service building into the coarse coverage fields. Called once
+   * a second by the simulation rather than per villager.
+   */
+  rebuildServiceFields(): void {
+    this.happinessField.fill(0);
+    this.fireField.fill(0);
+    const cell = this.serviceCell;
+    for (const b of this.buildingList) {
+      if (b.state !== 'active' || !b.enabled) continue;
+      const def = BUILDINGS[b.def];
+      const s = def.service;
+      if (!s || s.radius <= 0) continue;
+      const staffed = def.workers > 0 ? clamp01(b.workers.length / def.workers) : 1;
+      const strength = s.strength * (0.35 + staffed * 0.65);
+      if (strength <= 0) continue;
+
+      const minX = Math.max(0, Math.floor((b.cx - s.radius) / cell));
+      const maxX = Math.min(this.serviceW - 1, Math.ceil((b.cx + s.radius) / cell));
+      const minY = Math.max(0, Math.floor((b.cy - s.radius) / cell));
+      const maxY = Math.min(this.serviceH - 1, Math.ceil((b.cy + s.radius) / cell));
+      for (let gy = minY; gy <= maxY; gy++) {
+        for (let gx = minX; gx <= maxX; gx++) {
+          const dx = gx * cell - b.cx;
+          const dy = gy * cell - b.cy;
+          const d2 = dx * dx + dy * dy;
+          if (d2 > s.radius * s.radius) continue;
+          const falloff = 1 - Math.sqrt(d2) / s.radius;
+          const value = strength * (0.45 + falloff * 0.55);
+          const i = gy * this.serviceW + gx;
+          switch (s.kind) {
+            case 'market':
+              this.happinessField[i] += Math.min(12, value * 9);
+              break;
+            case 'faith':
+              this.happinessField[i] += Math.min(9, value * 7);
+              break;
+            case 'tavern':
+              this.happinessField[i] += Math.min(12, value * 10);
+              break;
+            case 'health':
+              this.happinessField[i] += Math.min(5, value * 4);
+              break;
+            case 'water':
+              this.happinessField[i] += Math.min(4, value * 3);
+              this.fireField[i] += value * 0.5;
+              break;
+            case 'fire':
+              this.fireField[i] += value * 0.8;
+              break;
+            default:
+              break;
+          }
+        }
+      }
+    }
+  }
+
+  private sampleField(field: Float32Array, x: number, y: number): number {
+    const gx = Math.round(x / this.serviceCell);
+    const gy = Math.round(y / this.serviceCell);
+    if (gx < 0 || gy < 0 || gx >= this.serviceW || gy >= this.serviceH) return 0;
+    return field[gy * this.serviceW + gx];
+  }
+
   /** Aggregated service strengths covering a point. */
   coverageAt(x: number, y: number): ServiceCoverage {
     const c: ServiceCoverage = { market: 0, faith: 0, tavern: 0, water: 0, fire: 0, health: 0 };
@@ -703,16 +808,9 @@ export class World {
     return c;
   }
 
-  /** Happiness contribution of nearby services, in points. */
+  /** Happiness contribution of nearby services, sampled from the coarse field. */
   serviceBonusAt(x: number, y: number): number {
-    const c = this.coverageAt(x, y);
-    let bonus = 0;
-    bonus += Math.min(12, c.market * 9);
-    bonus += Math.min(9, c.faith * 7);
-    bonus += Math.min(12, c.tavern * 10);
-    bonus += Math.min(4, c.water * 3);
-    bonus += Math.min(5, c.health * 4);
-    return bonus;
+    return this.sampleField(this.happinessField, x, y);
   }
 
   /** Registers a village event and surfaces it to the UI. */
@@ -726,8 +824,7 @@ export class World {
 
   /** How well a point is protected from fire (0..1+). */
   fireProtectionAt(x: number, y: number): number {
-    const c = this.coverageAt(x, y);
-    return c.water * 0.5 + c.fire * 0.8;
+    return this.sampleField(this.fireField, x, y);
   }
 }
 

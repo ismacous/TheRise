@@ -169,7 +169,14 @@ export function deserialize(data: SaveData): Simulation {
   w.villagers.length = 0;
   w.villagerById.clear();
   for (const raw of data.villagers) {
-    const v: Villager = { ...raw, path: null, pathIndex: 0, task: { ...raw.task } };
+    const v: Villager = {
+      ...raw,
+      path: null,
+      pathIndex: 0,
+      task: { ...raw.task },
+      happinessTarget: raw.happinessTarget ?? raw.happiness,
+      taskCooldown: 0,
+    };
     w.villagers.push(v);
     w.villagerById.set(v.id, v);
   }
@@ -206,6 +213,7 @@ export function deserialize(data: SaveData): Simulation {
   for (let i = 1; i < data.nextIds.villager; i++) w.allocVillagerId();
 
   w.refreshStockCache();
+  w.rebuildServiceFields();
   sim.tick(0.0001);
   return sim;
 }

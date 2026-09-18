@@ -226,7 +226,13 @@ export function updateVillagerNeeds(world: World, v: Villager, dt: number): void
     v.profession = 'idle';
   }
 
-  const target = happinessTarget(world, v) + Math.min(14, world.comfortPool * 0.35);
+  // Happiness is the most expensive per-villager score, so each villager
+  // refreshes its target on its own tenth of a second and merely eases toward
+  // it in between. The result is indistinguishable and ten times cheaper.
+  if ((world.tickCount + v.id) % 10 === 0) {
+    v.happinessTarget = happinessTarget(world, v);
+  }
+  const target = v.happinessTarget + Math.min(14, world.comfortPool * 0.35);
   v.happiness = damp(v.happiness, clamp(target, 0, 100), 0.35, dt);
 
   // Health: starvation and sickness wear people down; rest and food restore.
