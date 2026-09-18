@@ -9,6 +9,7 @@ import {
   updateEmployment,
   updateHousing,
   updateHouseholdConsumption,
+  updateEmigration,
   updateImmigration,
   updatePopulation,
   updateVillagerNeeds,
@@ -91,6 +92,7 @@ export class Simulation {
     updateEconomy(w, dt);
     updatePopulation(w, dt);
     updateImmigration(w, dt);
+    updateEmigration(w, dt);
 
     this.statsTimer -= dt;
     if (this.statsTimer <= 0) {

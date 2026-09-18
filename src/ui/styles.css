@@ -849,8 +849,9 @@ body {
 .build-banner {
   position: absolute;
   bottom: calc(var(--safe-bottom) + 76px);
-  left: 50%;
-  transform: translateX(-50%);
+  /* Shares the row with the minimap, so it stops short of it. */
+  left: calc(var(--safe-left) + 8px);
+  right: calc(var(--safe-right) + 152px);
   display: flex;
   align-items: center;
   gap: 9px;
@@ -858,10 +859,20 @@ body {
   backdrop-filter: blur(12px);
   border: 1px solid var(--gold);
   border-radius: 16px;
-  padding: 9px 12px;
+  padding: 8px 10px;
   box-shadow: var(--shadow);
-  max-width: min(94vw, 460px);
   z-index: 15;
+}
+
+.build-banner .grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.build-banner .name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .build-banner .name {
@@ -1085,8 +1096,9 @@ body {
 .objective-chip {
   position: absolute;
   bottom: calc(var(--safe-bottom) + 76px);
-  left: 50%;
-  transform: translateX(-50%);
+  /* Stops short of the minimap, which shares this corner of the screen. */
+  left: calc(var(--safe-left) + 8px);
+  right: calc(var(--safe-right) + 152px);
   display: flex;
   align-items: center;
   gap: 9px;
@@ -1096,7 +1108,6 @@ body {
   border-radius: 15px;
   padding: 7px 12px;
   box-shadow: var(--shadow);
-  width: min(88vw, 400px);
   cursor: pointer;
 }
 
@@ -1153,5 +1164,84 @@ body {
 
 /* Keep the events strip clear of the objective chip. */
 .events-strip {
-  bottom: calc(var(--safe-bottom) + 122px);
+  bottom: calc(var(--safe-bottom) + 124px);
+  max-width: calc(100vw - var(--safe-right) - 170px);
+}
+
+/* ── Minimap ────────────────────────────────────────────────────────────── */
+.minimap {
+  position: absolute;
+  right: calc(var(--safe-right) + 8px);
+  bottom: calc(var(--safe-bottom) + 76px);
+  width: 132px;
+  background: var(--panel);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--panel-line);
+  border-radius: 12px;
+  padding: 5px;
+  box-shadow: var(--shadow);
+  transition: transform 0.25s ease;
+}
+
+.minimap.collapsed {
+  transform: translateY(calc(100% - 26px));
+}
+
+.minimap-canvas {
+  width: 132px;
+  height: 132px;
+  display: block;
+  border-radius: 8px;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.minimap-toggle {
+  position: absolute;
+  top: -11px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 34px;
+  height: 20px;
+  border-radius: 10px;
+  border: 1px solid var(--panel-line);
+  background: var(--panel-solid);
+  color: var(--ink-dim);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+
+/* Keep the debug overlay clear of the minimap. */
+.debug {
+  bottom: calc(var(--safe-bottom) + 220px);
+}
+
+@media (max-width: 380px) {
+  .minimap {
+    width: 104px;
+  }
+  .minimap-canvas {
+    width: 104px;
+    height: 104px;
+  }
+  .objective-chip,
+  .build-banner {
+    right: calc(var(--safe-right) + 124px);
+  }
+  .events-strip {
+    max-width: calc(100vw - var(--safe-right) - 142px);
+  }
+}
+
+/* On a wide screen the sheet sits on the right, so shift the minimap left. */
+@media (min-width: 780px) {
+  .minimap {
+    right: calc(var(--safe-right) + 420px);
+  }
+  .objective-chip,
+  .build-banner {
+    right: calc(var(--safe-right) + 570px);
+  }
 }

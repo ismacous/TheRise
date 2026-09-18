@@ -1,4 +1,4 @@
-import { BUILDINGS, type BuildingId } from './data/buildings';
+import { BUILDINGS, type BuildingId, type NodeKind } from './data/buildings';
 import { GameRenderer, QUALITY_PRESETS, type RenderQuality } from './render/renderer';
 import { HEIGHT_SCALE } from './render/constants';
 import { createNewGame, type Simulation } from './sim/simulation';
@@ -9,6 +9,18 @@ import type { GameApi, QualityLevel, SheetId } from './ui/api';
 import { UiShell } from './ui/shell';
 
 const AUTOSAVE_INTERVAL = 120;
+
+const RESOURCE_LABELS: Partial<Record<NodeKind, string>> = {
+  tree: 'arbres',
+  berry_bush: 'buissons',
+  stone_rock: 'rochers',
+  clay_patch: "bancs d'argile",
+  coal_vein: 'filons',
+  iron_vein: 'filons',
+  gold_vein: 'filons',
+  fish_shoal: 'bancs de poissons',
+  wild_animal: 'bêtes',
+};
 
 function detectQuality(): QualityLevel {
   const mem = (navigator as { deviceMemory?: number }).deviceMemory ?? 4;
@@ -42,6 +54,8 @@ export class Game implements GameApi {
   private fpsSamples: number[] = [];
   private autosaveTimer = AUTOSAVE_INTERVAL;
   private paintedThisDrag = new Set<number>();
+  /** Live feedback for the placement banner: resources inside the radius. */
+  placementInfo: { valid: boolean; reason: string; resources: number; label: string } | null = null;
   /** Last pointer position, so the placement ghost tracks the finger. */
   private pointerX = -1;
   private pointerY = -1;
@@ -53,12 +67,19 @@ export class Game implements GameApi {
     this.quality = detectQuality();
     this.renderer = new GameRenderer(canvas, sim.world, QUALITY_PRESETS[this.quality]);
     this.ui = new UiShell(uiRoot, this);
+    this.wireMinimap();
     this.wireInput();
     this.wireLifecycle();
   }
 
   get world(): World {
     return this.sim.world;
+  }
+
+  private wireMinimap(): void {
+    const controls = this.renderer.controls;
+    this.ui.minimap.cameraTarget = () => ({ x: controls.target.x, y: controls.target.z });
+    this.ui.minimap.cameraSpan = () => controls.distance * 1.1;
   }
 
   // ── Input ───────────────────────────────────────────────────────────────
@@ -206,6 +227,7 @@ export class Game implements GameApi {
 
   cancelPlacement(): void {
     this.placementId = null;
+    this.placementInfo = null;
     this.painting = false;
     this.renderer.controls.paintMode = false;
     this.renderer.ghost.hide();
@@ -297,6 +319,7 @@ export class Game implements GameApi {
     this.cancelPlacement();
     this.renderer = new GameRenderer(this.canvas, sim.world, QUALITY_PRESETS[this.quality]);
     this.ui = new UiShell(uiRoot, this);
+    this.wireMinimap();
     this.wireInput();
     this.closeSheet();
   }
@@ -327,7 +350,11 @@ export class Game implements GameApi {
   }
 
   private tick(dt: number): void {
+    const terrainChanged = this.world.terrainChanges.length > 0;
     this.sim.update(dt);
+    if (terrainChanged || this.world.terrainChanges.length > 0) {
+      this.ui.minimap.markTerrainDirty();
+    }
     this.renderer.update(dt);
     this.updateSelectionMarkers();
     this.updateGhost();
@@ -394,6 +421,28 @@ export class Game implements GameApi {
     const cy = y + h / 2;
     const groundY = this.world.map.footprintElevation(x, y, w, h) * HEIGHT_SCALE;
     this.renderer.ghost.show(id, cx, groundY, cy, this.placementRotation, check.ok);
+
+    // Show the working radius while placing, and count what falls inside it:
+    // siting a camp well is the single most impactful decision in the game.
+    const def = BUILDINGS[id];
+    const radius = def.gather?.radius ?? (def.service && def.service.radius > 0 ? def.service.radius : 0);
+    if (radius > 0) this.renderer.markers.showRadius(cx, groundY, cy, radius);
+
+    let resources = 0;
+    let label = '';
+    if (def.gather) {
+      const kinds = def.gather.nodes;
+      this.world.nodeGrid.query(cx, cy, radius, (n) => {
+        if (!n.alive || !kinds.includes(n.kind)) return;
+        if ((n.x - cx) ** 2 + (n.y - cy) ** 2 > radius * radius) return;
+        resources++;
+      });
+      label = RESOURCE_LABELS[kinds[0]] ?? 'ressources';
+    } else if (def.category === 'farming') {
+      resources = Math.round(this.world.averageFertility(x, y, w, h) * 100);
+      label = 'de fertilité';
+    }
+    this.placementInfo = { valid: check.ok, reason: check.reason, resources, label };
   }
 
   private wireLifecycle(): void {

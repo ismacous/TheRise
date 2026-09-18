@@ -75,7 +75,7 @@ export function updateFires(world: World, dt: number): void {
     if (def.fireRisk <= 0) continue;
     const protection = world.fireProtectionAt(b.cx, b.cy);
     const p =
-      0.0000055 *
+      0.0000034 *
       dt *
       def.fireRisk *
       dryness *
@@ -89,7 +89,7 @@ export function updateFires(world: World, dt: number): void {
   for (const b of world.buildingList) {
     if (b.state !== 'burning') continue;
     const protection = world.fireProtectionAt(b.cx, b.cy);
-    const spreadRate = 0.028 * (world.weather === 'rain' ? 0.45 : 1) * (1 / (1 + protection * 0.5));
+    const spreadRate = 0.019 * (world.weather === 'rain' ? 0.45 : 1) * (1 / (1 + protection * 0.5));
     b.fire = clamp(b.fire + spreadRate * dt, 0, 1);
 
     // Spread to close neighbours.

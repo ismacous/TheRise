@@ -31,6 +31,13 @@ export interface GameApi {
   cancelPlacement(): void;
   /** Road painting keeps the mode active between taps. */
   readonly painting: boolean;
+  /** Live feedback about the spot currently under the placement ghost. */
+  readonly placementInfo: {
+    valid: boolean;
+    reason: string;
+    resources: number;
+    label: string;
+  } | null;
 
   selectedBuildingId: number | null;
   selectedVillagerId: number | null;

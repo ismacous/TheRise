@@ -69,5 +69,15 @@ await page.evaluate(() => {
 await page.waitForTimeout(1500);
 await page.screenshot({ path: `${outDir}/05-close.png` });
 
+// Placement mode, with the ghost and the working radius on screen.
+await page.evaluate(() => {
+  const g = window.game;
+  g.focusOn(g.world.startX, g.world.startY, 34);
+  g.beginPlacement('woodcutter_camp');
+});
+await page.mouse.move(206, 420);
+await page.waitForTimeout(1200);
+await page.screenshot({ path: `${outDir}/06-placement.png` });
+
 console.log(JSON.stringify({ stats, errors: errors.slice(0, 25) }, null, 2));
 await browser.close();

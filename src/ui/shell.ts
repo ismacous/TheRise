@@ -7,6 +7,7 @@ import { clear, el, onTap, setText } from './dom';
 import type { GameApi, SheetId } from './api';
 import { renderSheet, sheetTitle } from './panels';
 import { activeObjectives } from '../sim/objectives';
+import { Minimap } from './minimap';
 
 const WEATHER_ICON: Record<string, string> = {
   clear: '☀️',
@@ -74,6 +75,7 @@ export class UiShell {
   private buildBanner!: HTMLElement;
   private objectiveChip!: HTMLElement;
   private debug!: HTMLElement;
+  minimap!: Minimap;
 
   private resChips = new Map<GoodId, { node: HTMLElement; value: HTMLElement }>();
   private vitalNodes = new Map<string, HTMLElement>();
@@ -163,6 +165,7 @@ export class UiShell {
     this.buildBanner.style.display = 'none';
     this.debug = el('div', { class: 'debug' });
     this.debug.style.display = 'none';
+    this.minimap = new Minimap(this.api);
 
     this.root.append(
       hudTop,
@@ -170,6 +173,7 @@ export class UiShell {
       this.objectiveChip,
       this.eventsStrip,
       this.buildBanner,
+      this.minimap.root,
       this.dock,
       this.sheet,
       this.debug,
@@ -186,6 +190,7 @@ export class UiShell {
     if (this.refreshTimer > 0) return;
     this.refreshTimer = 0.2;
 
+    this.minimap.update();
     this.updateVitals();
     this.updateClock();
     this.updateResources();
@@ -340,8 +345,19 @@ export class UiShell {
       return;
     }
     const def = BUILDINGS[id];
-    if (this.buildBanner.dataset.v !== id) {
-      this.buildBanner.dataset.v = id;
+    const info = this.api.placementInfo;
+    const hint = info
+      ? info.valid
+        ? info.label
+          ? `${info.resources} ${info.label} à portée`
+          : 'Emplacement valide — touchez pour poser'
+        : info.reason
+      : def.placement.kind === 'paint'
+        ? 'Touchez et glissez pour tracer. ✕ pour terminer.'
+        : 'Touchez le sol pour poser le bâtiment.';
+    const key = `${id}|${hint}|${info?.valid}`;
+    if (this.buildBanner.dataset.v !== key) {
+      this.buildBanner.dataset.v = key;
       clear(this.buildBanner);
       const rotate = el('button', { class: 'icon-btn', text: '⟳', 'aria-label': 'Pivoter' });
       onTap(rotate, () => this.api.rotatePlacement());
@@ -350,16 +366,12 @@ export class UiShell {
       this.buildBanner.append(
         el('div', { class: 'grow' }, [
           el('div', { class: 'name', text: def.name }),
-          el('div', {
-            class: 'hint',
-            text: def.placement.kind === 'paint'
-              ? 'Touchez et glissez pour tracer. ✕ pour terminer.'
-              : 'Touchez le sol pour poser le bâtiment.',
-          }),
+          el('div', { class: 'hint', text: hint }),
         ]),
         def.placement.kind === 'paint' ? cancel : rotate,
         def.placement.kind === 'paint' ? el('span') : cancel,
       );
+      this.buildBanner.classList.toggle('invalid', info ? !info.valid : false);
     }
     this.buildBanner.style.display = 'flex';
   }

@@ -34,6 +34,10 @@ export interface GeneratedWorld {
 }
 
 const WATER_LEVEL = 0.0;
+/** Share of dry land given over to rocky highland, where ore is found. */
+const ROCK_SHARE = 0.16;
+/** Share of dry land given over to forest at the default density setting. */
+const FOREST_SHARE = 0.42;
 
 /**
  * Builds the playable valley: rolling hills, a meandering river feeding a lake,
@@ -68,7 +72,9 @@ export function generateWorld(opts: Partial<WorldGenOptions> = {}): GeneratedWor
       const continental = base.fbm(nx * 3.1, ny * 3.1, 5, 2.05, 0.52);
       const ridges = Math.abs(detail.fbm(nx * 7.5 + 11, ny * 7.5 + 7, 4) - 0.5) * 2;
 
-      let e = (continental - 0.45) * reliefScale;
+      // The +2 lifts the valley floor clear of the waterline: without it the
+      // noise dips below zero over wide areas and the map floods.
+      let e = (continental - 0.44) * reliefScale + 2;
       e += (1 - ridges) * 1.6 * o.relief;
       e += rim * 9 * (0.4 + o.relief);
       map.elevation[map.idx(x, y)] = e;
@@ -79,13 +85,34 @@ export function generateWorld(opts: Partial<WorldGenOptions> = {}): GeneratedWor
   const rivers = 1 + Math.round(o.waterAmount * 2);
   for (let r = 0; r < rivers; r++) carveRiver(map, rng, r, o.waterAmount);
   carveLake(map, rng, o.waterAmount);
+  balanceWater(map, o.waterAmount);
 
   // ── 3. Classify terrain & fertility ─────────────────────────────────────
+  // Thresholds are taken from the map's own distribution rather than from fixed
+  // constants, so every seed yields roughly the same mix of meadow, forest and
+  // highland instead of the occasional all-rock or all-forest valley.
+  const moistureField = new Float32Array(W * H);
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      moistureField[map.idx(x, y)] = moistNoise.fbm(x * 0.021 + 3, y * 0.021 + 9, 4);
+    }
+  }
+
+  const landElev: number[] = [];
+  const landMoist: number[] = [];
+  for (let i = 0; i < W * H; i++) {
+    if (map.elevation[i] <= WATER_LEVEL) continue;
+    landElev.push(map.elevation[i]);
+    landMoist.push(moistureField[i]);
+  }
+  const rockThreshold = quantile(landElev, 1 - ROCK_SHARE);
+  const forestThreshold = quantile(landMoist, 1 - FOREST_SHARE * (0.7 + o.forestDensity * 0.5));
+
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
       const i = map.idx(x, y);
       const e = map.elevation[i];
-      const moisture = moistNoise.fbm(x * 0.021 + 3, y * 0.021 + 9, 4);
+      const moisture = moistureField[i];
       const nearWater = distanceToWaterApprox(map, x, y, 4);
 
       let t = TERRAIN.GRASS;
@@ -93,9 +120,9 @@ export function generateWorld(opts: Partial<WorldGenOptions> = {}): GeneratedWor
         t = TERRAIN.WATER;
       } else if (e < WATER_LEVEL + 0.45 || nearWater <= 1) {
         t = TERRAIN.SAND;
-      } else if (e > 5.2 + (1 - moisture) * 2.2) {
+      } else if (e > rockThreshold) {
         t = TERRAIN.ROCK;
-      } else if (moisture > 0.56 - o.forestDensity * 0.3 && e < 7.2) {
+      } else if (moisture > forestThreshold) {
         t = TERRAIN.FOREST;
       }
       map.terrain[i] = t;
@@ -136,7 +163,7 @@ export function generateWorld(opts: Partial<WorldGenOptions> = {}): GeneratedWor
 
       // Trees: dense in forest, scattered on grass.
       if (t === TERRAIN.FOREST) {
-        if (rng.chance(0.46 * (0.6 + o.forestDensity * 0.7))) {
+        if (rng.chance(0.40 * (0.6 + o.forestDensity * 0.7))) {
           add('tree', x, y, 1, rng.int(0, 3));
           map.blocker[i] = nodes[nodes.length - 1].id;
           continue;
@@ -172,17 +199,19 @@ export function generateWorld(opts: Partial<WorldGenOptions> = {}): GeneratedWor
       }
 
       // Ore veins, gated by noise so they come in believable clusters.
+      // Ore hugs the highlands. Gating on the map's own rock threshold keeps
+      // every seed supplied instead of leaving flat valleys without a mine.
       const ore = oreNoise.fbm(x * 0.045 + 17, y * 0.045 + 23, 3);
-      if (t === TERRAIN.ROCK || e > 4.4) {
-        if (ore > 0.74 && rng.chance(0.09)) {
+      if (t === TERRAIN.ROCK || e > rockThreshold - 1.4) {
+        if (ore > 0.60 && rng.chance(0.10)) {
           add('coal_vein', x, y, rng.int(400, 700), 0);
           continue;
         }
-        if (ore > 0.80 && rng.chance(0.055)) {
+        if (ore > 0.66 && rng.chance(0.07)) {
           add('iron_vein', x, y, rng.int(300, 520), 0);
           continue;
         }
-        if (ore > 0.86 && e > 6.2 && rng.chance(0.022)) {
+        if (ore > 0.72 && e > rockThreshold && rng.chance(0.05)) {
           add('gold_vein', x, y, rng.int(120, 230), 0);
           continue;
         }
@@ -231,6 +260,36 @@ export function generateWorld(opts: Partial<WorldGenOptions> = {}): GeneratedWor
 
   const start = findStartLocation(map, rng);
   return { map, nodes, startX: start.x, startY: start.y };
+}
+
+/**
+ * Keeps the flooded share of the map inside a playable band. Some seeds carve
+ * a lake that swallows the valley and others leave no shoreline at all, so the
+ * whole height field is shifted until the water reads as a river and a lake
+ * rather than an ocean or a desert.
+ */
+function balanceWater(map: TileMap, waterAmount: number): void {
+  const target = 0.10 + waterAmount * 0.14;
+  const maxShare = target + 0.09;
+  const minShare = Math.max(0.035, target - 0.07);
+  const total = map.width * map.height;
+
+  for (let pass = 0; pass < 8; pass++) {
+    let wet = 0;
+    for (let i = 0; i < total; i++) if (map.elevation[i] <= WATER_LEVEL) wet++;
+    const share = wet / total;
+    if (share <= maxShare && share >= minShare) return;
+    const delta = share > maxShare ? 0.55 : -0.35;
+    for (let i = 0; i < total; i++) map.elevation[i] += delta;
+  }
+}
+
+/** Value at the given quantile of an unsorted numeric array. */
+function quantile(values: number[], q: number): number {
+  if (values.length === 0) return 0;
+  const sorted = Float64Array.from(values).sort();
+  const idx = Math.min(sorted.length - 1, Math.max(0, Math.round(q * (sorted.length - 1))));
+  return sorted[idx];
 }
 
 function localSlope(map: TileMap, x: number, y: number): number {
@@ -394,8 +453,8 @@ function findStartLocation(map: TileMap, rng: Rng): { x: number; y: number } {
     let water = 0;
     let open = 0;
     let coreForest = 0;
-    for (let j = -16; j <= 16; j += 2) {
-      for (let i = -16; i <= 16; i += 2) {
+    for (let j = -22; j <= 22; j += 2) {
+      for (let i = -22; i <= 22; i += 2) {
         const px = x + i;
         const py = y + j;
         if (!map.inBounds(px, py)) continue;
@@ -409,12 +468,13 @@ function findStartLocation(map: TileMap, rng: Rng): { x: number; y: number } {
         if (t === TERRAIN.GRASS && core) open++;
       }
     }
+    // Water nearby is worth a lot: fishing is an early food source and the
+    // tannery, the water sawmill and the clay pit all need a shore.
     const score =
       open * 2.2 +
-      Math.min(trees, 60) * 0.9 +
-      Math.min(water, 22) * 1.5 -
-      coreForest * 1.15 -
-      Math.abs(water - 16) * 0.25;
+      Math.min(trees, 80) * 0.8 +
+      (water > 0 ? Math.min(water, 26) * 2.4 : -60) -
+      coreForest * 1.15;
     if (score > best.score) best = { x, y, score };
   }
   return { x: best.x, y: best.y };

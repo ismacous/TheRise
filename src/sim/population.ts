@@ -234,7 +234,9 @@ export function updateVillagerNeeds(world: World, v: Villager, dt: number): void
     v.sick = Math.max(0, v.sick - dt * (0.004 / world.modifiers.diseaseResist));
     v.health = Math.max(0, v.health - dt * 0.5);
   } else if (v.satiety <= 0) {
-    v.health = Math.max(0, v.health - dt * 1.6);
+    // Starvation is slow on purpose: a week of empty larders before anyone
+    // dies leaves the player time to react. This is a chill game.
+    v.health = Math.max(0, v.health - dt * 0.22);
   } else if (v.satiety > 55) {
     v.health = Math.min(100, v.health + dt * 0.8);
   }
@@ -317,8 +319,34 @@ export function removeVillager(world: World, v: Villager, cause: string): void {
   if (idx !== -1) world.villagers.splice(idx, 1);
   world.villagerById.delete(v.id);
   world.emitter.emit('villagerDied', { villager: v, cause });
-  if (cause !== 'vieillesse') {
+  if (cause !== 'vieillesse' && cause !== 'départ') {
     world.notify(`${fullName(v)} est mort·e de ${cause}`, '🪦', 'bad', v.x, v.y);
+  }
+}
+
+/**
+ * Villagers pack up and leave when life becomes unbearable. Emigration is the
+ * pressure valve that keeps a mismanaged village from spiralling into a wipe:
+ * the population shrinks back to what the food supply can carry instead of
+ * everyone starving to death.
+ */
+export function updateEmigration(world: World, dt: number): void {
+  const s = world.stats;
+  if (world.villagers.length <= 3) return;
+  const desperate = s.foodDays < 1.5 || s.happiness < 22;
+  if (!desperate) return;
+
+  for (let i = world.villagers.length - 1; i >= 0; i--) {
+    const v = world.villagers[i];
+    if (v.profession === 'child') continue;
+    if (v.happiness > 30 && v.satiety > 25) continue;
+    const p = 0.0016 * dt * (1 + (30 - Math.min(30, v.happiness)) / 30);
+    if (world.rng.next() >= p) continue;
+    const name = fullName(v);
+    removeVillager(world, v, 'départ');
+    world.notify(`${name} quitte le village`, '🚪', 'bad');
+    // One departure per tick keeps the exodus legible rather than sudden.
+    break;
   }
 }
 
