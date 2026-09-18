@@ -187,3 +187,20 @@ describe('textile chain', () => {
     expect(w.stockOf('clothes')).toBeGreaterThan(0);
   });
 });
+
+describe('shared deposits', () => {
+  it('lets a whole crew work one vein', () => {
+    const sim = createNewGame({ seed: 'vein' });
+    const w = sim.world;
+    w.research.completed.add('r_quarrying');
+    w.treasury = 5000;
+    const quarry = placeNear(w, 'quarry');
+    expect(quarry, 'no rock outcrop on this map').toBeTruthy();
+    for (let i = 0; i < 20; i++) createVillager(w, w.startX + 1, w.startY + 1, 25);
+    run(sim, 240);
+    expect(quarry!.workers.length).toBeGreaterThan(1);
+    // Every worker must be productive, not just the one who claimed the rock.
+    expect(quarry!.stall).toBeNull();
+    expect(w.stockOf('stone') + (quarry!.inv.stone ?? 0)).toBeGreaterThan(30);
+  });
+});

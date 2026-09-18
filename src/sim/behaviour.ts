@@ -247,7 +247,7 @@ function doHarvest(world: World, v: Villager, dt: number): void {
         v.idleFor += dt;
         return;
       }
-      node.claimedBy = v.id;
+      if (node.maxAmount <= 1) node.claimedBy = v.id;
       v.task.nodeId = node.id;
       b.stall = null;
     }

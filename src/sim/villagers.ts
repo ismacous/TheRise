@@ -205,7 +205,11 @@ export function findHarvestNode(world: World, b: Building, v: Villager): Resourc
     if (!n.alive || n.amount <= 0) return;
     if (!kinds.includes(n.kind)) return;
     if (n.growth < 0.95 && n.kind === 'tree') return;
-    if (n.claimedBy !== 0 && n.claimedBy !== v.id) return;
+    // Only single-use nodes — a tree to fell, an animal to hunt — are claimed.
+    // A vein, a quarry rock or a berry bush holds plenty for a whole crew, and
+    // reserving it for one worker left the rest of the team reporting that
+    // there was nothing in range.
+    if (n.maxAmount <= 1 && n.claimedBy !== 0 && n.claimedBy !== v.id) return;
     const dxb = n.x - b.cx;
     const dyb = n.y - b.cy;
     if (dxb * dxb + dyb * dyb > def.gather!.radius * def.gather!.radius) return;
