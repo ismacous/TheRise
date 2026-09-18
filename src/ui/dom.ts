@@ -64,10 +64,6 @@ export function setText(node: HTMLElement | null, text: string): void {
   if (node && node.textContent !== text) node.textContent = text;
 }
 
-export function toggleClass(node: HTMLElement, name: string, on: boolean): void {
-  node.classList.toggle(name, on);
-}
-
 /** Percentage bar used throughout the panels. */
 export function bar(value: number, className = ''): HTMLElement {
   const outer = el('div', { class: `bar ${className}` });
@@ -75,11 +71,4 @@ export function bar(value: number, className = ''): HTMLElement {
   fill.style.width = `${Math.max(0, Math.min(100, value * 100))}%`;
   outer.append(fill);
   return outer;
-}
-
-export function iconLabel(icon: string, label: string, cls = ''): HTMLElement {
-  return el('span', { class: `icon-label ${cls}` }, [
-    el('span', { class: 'ic', text: icon }),
-    el('span', { class: 'lb', text: label }),
-  ]);
 }

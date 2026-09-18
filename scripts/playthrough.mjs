@@ -1,10 +1,11 @@
-// Drives a real playthrough headlessly: places a production chain, runs the
-// simulation fast, and reports whether the economy actually works.
+// Plays a coherent village headlessly and reports whether the economy works:
+// does bread get baked, does iron get smelted, does the population grow.
 import { chromium } from 'playwright';
 import { mkdirSync } from 'node:fs';
 
 const url = process.argv[2] ?? 'http://127.0.0.1:4173/';
 const outDir = process.argv[3] ?? '/tmp/claude-0/play';
+const minutes = Number(process.argv[4] ?? 5);
 mkdirSync(outDir, { recursive: true });
 
 const browser = await chromium.launch({
@@ -18,104 +19,109 @@ const page = await browser.newPage({
   hasTouch: true,
 });
 const errors = [];
-page.on('console', (m) => {
-  if (m.type() === 'error') errors.push(m.text());
-});
-page.on('pageerror', (e) => errors.push(`[pageerror] ${e.message}`));
-
+page.on('pageerror', (e) => errors.push(e.message));
 await page.goto(url, { waitUntil: 'load', timeout: 60000 });
-await page.waitForFunction(() => !!window.game, null, { timeout: 30000 });
+await page.waitForFunction(() => !!window.theRise, null, { timeout: 30000 });
 
-// Build a starter village next to the town hall.
 const built = await page.evaluate(() => {
-  const g = window.game;
+  const { game: g, RESEARCH, createVillager } = window.theRise;
   const w = g.world;
-  w.treasury = 4000;
-  const log = [];
+  w.treasury = 20000;
+  for (const id of Object.keys(RESEARCH)) w.research.completed.add(id);
 
-  function placeNear(def, preferNode) {
-    for (let r = 3; r < 60; r++) {
-      for (let a = 0; a < 40; a++) {
-        const ang = (a / 40) * Math.PI * 2;
+  const place = (def, node, min = 8) => {
+    for (let r = 4; r < 70; r++) {
+      for (let a = 0; a < 56; a++) {
+        const ang = (a / 56) * Math.PI * 2;
         const x = Math.round(w.startX + Math.cos(ang) * r);
         const y = Math.round(w.startY + Math.sin(ang) * r);
         if (!w.canPlace(def, x, y).ok) continue;
-        if (preferNode) {
+        if (node) {
           let n = 0;
-          w.nodeGrid.query(x, y, 12, (node) => {
-            if (node.kind === preferNode) n++;
+          w.nodeGrid.query(x, y, 14, (c) => {
+            if (c.kind === node && c.alive) n++;
           });
-          if (n < 6) continue;
+          if (n < min) continue;
         }
         const b = w.place(def, x, y, 0, true);
-        if (b) {
-          log.push(def);
-          return b;
-        }
+        if (b) return def;
       }
     }
-    return null;
-  }
+    return `FAILED:${def}`;
+  };
 
-  for (const r of ['r_shelter', 'r_forestry', 'r_agriculture', 'r_milling', 'r_charcoal', 'r_baking', 'r_marketplace', 'r_quarrying', 'r_hunting', 'r_butchery', 'r_cottages']) {
-    w.research.completed.add(r);
-  }
+  const log = [];
+  // Wood and food first, then the refining chains that depend on them.
+  log.push(place('woodcutter_camp', 'tree', 25));
+  log.push(place('woodcutter_camp', 'tree', 20));
+  log.push(place('forester_hut', 'tree', 5));
+  log.push(place('sawmill'));
+  log.push(place('gatherer_hut', 'berry_bush', 3));
+  log.push(place('storehouse'));
+  log.push(place('market'));
+  log.push(place('wheat_field'));
+  log.push(place('wheat_field'));
+  log.push(place('windmill'));
+  log.push(place('charcoal_burner'));
+  log.push(place('bakery'));
+  log.push(place('hunter_camp', 'wild_animal', 1));
+  log.push(place('butcher'));
+  log.push(place('quarry', 'stone_rock', 1));
+  log.push(place('coal_mine', 'coal_vein', 1));
+  log.push(place('iron_mine', 'iron_vein', 1));
+  log.push(place('smelter'));
+  log.push(place('blacksmith'));
+  log.push(place('chicken_coop'));
+  log.push(place('sheep_pasture'));
+  log.push(place('weaver'));
+  log.push(place('tailor'));
+  log.push(place('well'));
+  log.push(place('chapel'));
+  for (let i = 0; i < 14; i++) place('cottage');
 
-  placeNear('woodcutter_camp', 'tree');
-  placeNear('woodcutter_camp', 'tree');
-  placeNear('forester_hut', 'tree');
-  placeNear('gatherer_hut', 'berry_bush');
-  placeNear('sawmill');
-  placeNear('storehouse');
-  placeNear('market');
-  placeNear('wheat_field');
-  placeNear('windmill');
-  placeNear('charcoal_burner');
-  placeNear('bakery');
-  placeNear('hunter_camp', 'tree');
-  placeNear('butcher');
-  placeNear('quarry', 'stone_rock');
-  for (let i = 0; i < 6; i++) placeNear('cottage');
-  return log;
+  // Seed enough hands that the chains can actually be staffed.
+  for (let i = 0; i < 70; i++) {
+    createVillager(w, w.startX + (Math.random() - 0.5) * 16, w.startY + (Math.random() - 0.5) * 16, 18 + Math.random() * 20);
+  }
+  return log.filter((l) => l.startsWith('FAILED'));
 });
 
 await page.evaluate(() => window.game.setSpeed(4));
 
 const samples = [];
-for (let i = 0; i < 6; i++) {
-  await page.waitForTimeout(20000);
-  const s = await page.evaluate(() => {
-    const w = window.game.world;
-    const stock = {};
-    for (const [k, v] of Object.entries(w.stock)) if (v > 0) stock[k] = Math.round(v);
-    return {
-      day: w.time.day,
-      season: w.time.season,
-      pop: w.stats.population,
-      employed: w.stats.employed,
-      idle: w.stats.idle,
-      foodDays: Number(w.stats.foodDays.toFixed(1)),
-      happy: Math.round(w.stats.happiness),
-      gold: Math.round(w.treasury),
-      research: Math.round(w.research.points),
-      stock,
-      stalls: w.buildingList.filter((b) => b.stall).map((b) => `${b.def}: ${b.stall}`),
-      drawCalls: window.game.renderer.renderer.info.render.calls,
-      triangles: window.game.renderer.renderer.info.render.triangles,
-    };
-  });
-  samples.push(s);
+for (let i = 0; i < minutes; i++) {
+  await page.waitForTimeout(60000);
+  samples.push(
+    await page.evaluate(() => {
+      const w = window.game.world;
+      const stock = {};
+      for (const [k, v] of Object.entries(w.stock)) if (v > 0.5) stock[k] = Math.round(v);
+      const stalls = {};
+      for (const b of w.buildingList) if (b.stall) stalls[`${b.def}`] = b.stall;
+      return {
+        day: w.time.day,
+        season: w.time.season,
+        pop: w.stats.population,
+        idle: w.stats.idle,
+        foodDays: Number(w.stats.foodDays.toFixed(1)),
+        happy: Math.round(w.stats.happiness),
+        gold: Math.round(w.treasury),
+        tier: w.stats.tier,
+        objectives: w.completedObjectives.size,
+        stock,
+        stalls,
+      };
+    }),
+  );
 }
 
 await page.evaluate(() => {
   const w = window.game.world;
-  window.game.focusOn(w.startX, w.startY, 34);
+  window.game.closeSheet();
+  window.game.focusOn(w.startX, w.startY, 40);
 });
-await page.waitForTimeout(2000);
+await page.waitForTimeout(3000);
 await page.screenshot({ path: `${outDir}/village.png` });
-await page.evaluate(() => window.game.focusOn(window.game.world.startX, window.game.world.startY, 60));
-await page.waitForTimeout(2000);
-await page.screenshot({ path: `${outDir}/village-wide.png` });
 
-console.log(JSON.stringify({ built, samples, errors: errors.slice(0, 10) }, null, 2));
+console.log(JSON.stringify({ built, samples, errors: errors.slice(0, 6) }, null, 2));
 await browser.close();

@@ -38,14 +38,6 @@ export function buildingVisual(defId: BuildingId, state: BuildingState): Buildin
   return v;
 }
 
-export function clearBuildingCache(): void {
-  for (const v of cache.values()) {
-    v.geometry.dispose();
-    v.rotor?.geometry.dispose();
-  }
-  cache.clear();
-}
-
 function make(defId: BuildingId, state: BuildingState): BuildingVisual {
   const def = BUILDINGS[defId];
   const [W, D] = def.size;

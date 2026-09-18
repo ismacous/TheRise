@@ -1,6 +1,6 @@
 import { clamp } from '../core/util';
 import { BUILDINGS } from '../data/buildings';
-import { SEASONS, type ActiveEvent, type Building, type WeatherKind } from './types';
+import { SEASONS, type Building, type WeatherKind } from './types';
 import { createVillager } from './villagers';
 import type { World } from './world';
 
@@ -307,8 +307,4 @@ export function eventFoodMultiplier(world: World): number {
     if (e.kind === 'harsh_winter') m *= e.severity;
   }
   return m;
-}
-
-export function activeEventOf(world: World, kind: ActiveEvent['kind']): ActiveEvent | undefined {
-  return world.activeEvents.find((e) => e.kind === kind);
 }

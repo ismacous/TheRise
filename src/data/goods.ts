@@ -244,13 +244,5 @@ GOODS.wheat.color = '#d8b94a';
 
 export const ALL_GOOD_IDS = Object.keys(GOODS) as GoodId[];
 
-export const FOOD_GOODS: GoodId[] = ALL_GOOD_IDS.filter((g) => GOODS[g].nutrition > 0);
-
 export const COMFORT_GOODS: GoodId[] = ALL_GOOD_IDS.filter((g) => (GOODS[g].comfort ?? 0) > 0);
 
-export type GoodStack = { good: GoodId; amount: number };
-
-/** Sum of nutrition for a bag of goods. */
-export function nutritionOf(good: GoodId, amount = 1): number {
-  return GOODS[good].nutrition * amount;
-}

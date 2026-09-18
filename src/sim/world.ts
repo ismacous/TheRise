@@ -790,24 +790,6 @@ export class World {
     return field[gy * this.serviceW + gx];
   }
 
-  /** Aggregated service strengths covering a point. */
-  coverageAt(x: number, y: number): ServiceCoverage {
-    const c: ServiceCoverage = { market: 0, faith: 0, tavern: 0, water: 0, fire: 0, health: 0 };
-    for (const b of this.buildingList) {
-      if (b.state !== 'active' || !b.enabled) continue;
-      const def = BUILDINGS[b.def];
-      const s = def.service;
-      if (!s || s.radius <= 0) continue;
-      const d2 = (b.cx - x) ** 2 + (b.cy - y) ** 2;
-      if (d2 > s.radius * s.radius) continue;
-      const falloff = 1 - Math.sqrt(d2) / s.radius;
-      const staffed = def.workers > 0 ? clamp01(b.workers.length / def.workers) : 1;
-      const value = s.strength * (0.45 + falloff * 0.55) * (0.35 + staffed * 0.65);
-      if (s.kind in c) c[s.kind as keyof ServiceCoverage] += value;
-    }
-    return c;
-  }
-
   /** Happiness contribution of nearby services, sampled from the coarse field. */
   serviceBonusAt(x: number, y: number): number {
     return this.sampleField(this.happinessField, x, y);
@@ -826,13 +808,4 @@ export class World {
   fireProtectionAt(x: number, y: number): number {
     return this.sampleField(this.fireField, x, y);
   }
-}
-
-export interface ServiceCoverage {
-  market: number;
-  faith: number;
-  tavern: number;
-  water: number;
-  fire: number;
-  health: number;
 }

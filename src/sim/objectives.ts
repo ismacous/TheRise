@@ -1,4 +1,4 @@
-import { BUILDINGS, type BuildingId } from '../data/buildings';
+import type { BuildingId } from '../data/buildings';
 import type { GoodId } from '../data/goods';
 import type { World } from './world';
 
@@ -173,8 +173,6 @@ export const OBJECTIVES: Objective[] = [
   ),
 ];
 
-export const OBJECTIVE_BY_ID = new Map(OBJECTIVES.map((o) => [o.id, o]));
-
 /** The next three unfinished objectives, in order. */
 export function activeObjectives(w: World): Objective[] {
   return OBJECTIVES.filter((o) => !w.completedObjectives.has(o.id)).slice(0, 3);
@@ -195,19 +193,4 @@ export function updateObjectives(w: World): void {
       .join(' et ');
     w.notify(`Objectif atteint : ${o.title}${reward ? ` (+${reward})` : ''}`, '🏅', 'good');
   }
-}
-
-/** Human-readable name for the building an objective points at, if any. */
-export function objectiveBuildingHint(o: Objective): string | null {
-  const map: Record<string, BuildingId> = {
-    wood: 'woodcutter_camp',
-    sawmill: 'sawmill',
-    food: 'gatherer_hut',
-    forester: 'forester_hut',
-    market: 'market',
-    stone: 'quarry',
-    trade: 'trade_post',
-  };
-  const id = map[o.id];
-  return id ? BUILDINGS[id].name : null;
 }

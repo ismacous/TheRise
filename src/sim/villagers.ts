@@ -1,5 +1,5 @@
 import { Rng } from '../core/rng';
-import { clamp, clamp01 } from '../core/util';
+import { clamp } from '../core/util';
 import { BUILDINGS, type NodeKind } from '../data/buildings';
 import { GOODS, type GoodId } from '../data/goods';
 import { FEMALE_NAMES, HAIR_COLORS, MALE_NAMES, SKIN_TONES, SURNAMES } from '../data/names';
@@ -356,5 +356,3 @@ export function satietyDecayPerSecond(world: World): number {
   const winter = world.time.season === 'winter' ? 1.25 : 1;
   return (SATIETY_PER_DAY / DAY_SECONDS) * winter * world.modifiers.foodUpkeep * world.foodUpkeepEvent;
 }
-
-export const clampHappiness = (h: number): number => clamp01(h / 100) * 100;

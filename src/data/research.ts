@@ -793,12 +793,3 @@ export const BRANCH_LABELS: Record<ResearchBranch, { name: string; icon: string;
   craft: { name: 'Artisanat', icon: '🧵', color: '#9b6fae' },
   city: { name: 'Cité & commerce', icon: '🏛️', color: '#4a7fa8' },
 };
-
-/** Map of building -> research that unlocks it, derived once at load. */
-export const UNLOCKED_BY = (() => {
-  const m = new Map<BuildingId, ResearchId>();
-  for (const id of ALL_RESEARCH_IDS) {
-    for (const bId of RESEARCH[id].unlocks) m.set(bId, id);
-  }
-  return m;
-})();

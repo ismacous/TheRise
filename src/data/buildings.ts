@@ -1309,8 +1309,3 @@ export const CATEGORY_LABELS: Record<BuildingCategory, { name: string; icon: str
   service: { name: 'Services', icon: '⛪' },
   infrastructure: { name: 'Voirie', icon: '🛤️' },
 };
-
-/** Buildings available with no research at all. */
-export const STARTER_BUILDINGS: BuildingId[] = ALL_BUILDING_IDS.filter(
-  (id) => !BUILDINGS[id].requires && BUILDINGS[id].id !== 'town_hall',
-);

@@ -1301,13 +1301,3 @@ function renderSettings(api: GameApi, body: HTMLElement, refresh: Refresh): void
     }),
   );
 }
-
-export function buildingSummaryLine(b: Building): string {
-  const def = BUILDINGS[b.def];
-  if (b.state === 'building' || b.state === 'planned') return 'En construction';
-  if (b.state === 'burning') return 'En feu !';
-  if (b.state === 'ruined') return 'Ruines';
-  if (b.stall) return b.stall;
-  if (def.workers > 0 && b.workers.length === 0) return 'Sans ouvrier';
-  return 'En activité';
-}

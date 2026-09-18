@@ -17,7 +17,7 @@ import {
   yieldFromNode,
 } from './villagers';
 import { activeRecipe } from './recipes';
-import { TERRAIN, type Building, type HaulJob, type Villager } from './types';
+import type { Building, HaulJob, Villager } from './types';
 import type { World } from './world';
 
 const NIGHT_START = 0.9;
@@ -647,9 +647,4 @@ function doDouse(world: World, v: Villager, dt: number): void {
     const strength = v.profession === 'firewarden' ? 0.2 : 0.07;
     b.fire = Math.max(0, b.fire - strength * dt);
   }
-}
-
-/** Fields and pastures never block walking, so villagers cross them freely. */
-export function isWalkableTerrainForWork(world: World, x: number, y: number): boolean {
-  return world.map.inBounds(x, y) && world.map.terrain[world.map.idx(x, y)] !== TERRAIN.WATER;
 }
