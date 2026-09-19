@@ -1877,6 +1877,79 @@ function renderBuilding(api: GameApi, body: HTMLElement, refresh: Refresh): void
     body.append(inv);
   }
 
+  // ── Sorting ─────────────────────────────────────────────────────────────
+  // What a depot is willing to hold. Everything, until the player says
+  // otherwise — which is how a village gets quarters: ore by the forges,
+  // grain by the bakery, and builders who never cross the valley for a plank.
+  if (BUILDINGS[b.def].storage?.global && b.state === 'active') {
+    const sortable = w.sortableGoods(b);
+    const current = new Set(b.sorting ?? sortable);
+    body.append(
+      el('div', { class: 'section-title' }, [
+        el('span', { text: 'Tri' }),
+        el('span', {
+          class: 'qty',
+          text: b.sorting ? `${current.size}/${sortable.length}` : 'tout',
+        }),
+      ]),
+    );
+    body.append(
+      el('div', {
+        class: 'card-desc',
+        text: b.sorting
+          ? "Ce dépôt ne garde que ce qui est coché. Le reste en repart."
+          : 'Ce dépôt accepte tout ce qu’on lui apporte.',
+      }),
+    );
+
+    const apply = (next: Set<GoodId>): void => {
+      w.setSorting(b, [...next]);
+      w.refreshStockCache();
+      refresh();
+    };
+
+    const row = el('div', { class: 'btn-row' });
+    const all = el('button', { class: 'btn tiny', text: 'Tout' });
+    onTap(all, () => apply(new Set(sortable)));
+    const none = el('button', { class: 'btn tiny', text: 'Rien' });
+    // An empty list is still a list, so the depot really does refuse
+    // everything — useful as a starting point before ticking two goods.
+    onTap(none, () => {
+      w.setSorting(b, []);
+      w.refreshStockCache();
+      refresh();
+    });
+    row.append(all, none);
+    body.append(row);
+
+    const grid = el('div', { class: 'sort-grid' });
+    for (const good of sortable) {
+      const on = current.has(good);
+      const chip = el('button', { class: `sort-chip ${on ? 'on' : ''}` }, [
+        (() => {
+          const dot = el('span', { class: 'dot' });
+          dot.style.background = GOODS[good].color;
+          return dot;
+        })(),
+        el('span', { class: 'grow', text: GOODS[good].name }),
+      ]);
+      onTap(chip, () => {
+        const next = new Set(current);
+        if (on) next.delete(good);
+        else next.add(good);
+        if (next.size === 0) {
+          w.setSorting(b, []);
+          w.refreshStockCache();
+          refresh();
+          return;
+        }
+        apply(next);
+      });
+      grid.append(chip);
+    }
+    body.append(grid);
+  }
+
   if (b.residents.length > 0) {
     body.append(el('div', { class: 'section-title', text: 'Foyer' }));
     for (const id of b.residents) {

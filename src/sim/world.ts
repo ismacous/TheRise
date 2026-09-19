@@ -2,7 +2,7 @@ import { Emitter } from '../core/emitter';
 import { Rng } from '../core/rng';
 import { clamp, clamp01, smoothstep } from '../core/util';
 import { BUILDINGS, type BuildingId, type NodeKind } from '../data/buildings';
-import { GOODS, type GoodId } from '../data/goods';
+import { ALL_GOOD_IDS, GOODS, type GoodId } from '../data/goods';
 import { generateWorld, type WorldGenOptions } from './worldgen';
 import { PathFinder } from './pathfinding';
 import { SpatialGrid } from './spatial';
@@ -480,6 +480,7 @@ export class World {
       work: 0,
       recipeIndex: 0,
       efficiency: 0,
+      sorting: null,
       repairing: false,
       demolish: null,
       output: emptyMeter(),
@@ -822,7 +823,31 @@ export class World {
     const def = BUILDINGS[b.def];
     if (!def.storage) return false;
     if (def.storage.accepts && !def.storage.accepts.includes(good)) return false;
+    // The player's own sorting, on top of what the building can physically
+    // hold. This is what lets a village have quarters: a depot by the forges
+    // that takes only ore and ingots, a granary that takes only food.
+    if (b.sorting && !b.sorting.includes(good)) return false;
     return true;
+  }
+
+  /** Every good this depot could hold if the player let it. */
+  sortableGoods(b: Building): GoodId[] {
+    const def = BUILDINGS[b.def];
+    if (!def.storage) return [];
+    if (def.storage.accepts) return [...def.storage.accepts];
+    return ALL_GOOD_IDS;
+  }
+
+  /**
+   * Narrows or widens a depot's sorting. Passing every good back sets it to
+   * null again, so "everything" stays "everything" as the catalogue grows.
+   */
+  setSorting(b: Building, goods: GoodId[] | null): void {
+    if (!goods || goods.length >= this.sortableGoods(b).length) {
+      b.sorting = null;
+      return;
+    }
+    b.sorting = [...goods];
   }
 
   /** Total of a good across every global storehouse. */

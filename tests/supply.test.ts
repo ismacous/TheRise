@@ -3,6 +3,7 @@ import type { BuildingId, NodeKind } from '../src/data/buildings';
 import { computeStats, createNewGame, type Simulation } from '../src/sim/simulation';
 import { createVillager } from '../src/sim/villagers';
 import { workerSlots } from '../src/sim/levels';
+import { rebuildHaulJobs } from '../src/sim/logistics';
 import { findDepotWith, findInputSource, planSupply, siteErrand, workshopErrand } from '../src/sim/supply';
 import type { Building } from '../src/sim/types';
 import type { World } from '../src/sim/world';
@@ -119,5 +120,49 @@ describe('who may take from where', () => {
     const errand = workshopErrand(w, mill);
     expect(errand?.good).toBe('logs');
     expect(errand?.from.id).toBe(camp.id);
+  });
+});
+
+/**
+ * Sorting is what lets a village have quarters: ore by the forges, grain by
+ * the bakery. It is only useful if the rest of the simulation honours it —
+ * including for goods already inside when the player changes their mind.
+ */
+describe('depot sorting', () => {
+  it('refuses what it is not sorting, and sends away what it already had', () => {
+    const sim = createNewGame({ seed: 'sorting' });
+    const w = sim.world;
+    const hall = w.buildingList.find((b) => b.def === 'town_hall')!;
+
+    expect(hall.sorting).toBeNull();
+    expect(w.accepts(hall, 'logs')).toBe(true);
+    expect(w.accepts(hall, 'stone')).toBe(true);
+
+    hall.inv.stone = 20;
+    w.setSorting(hall, ['logs']);
+    expect(w.accepts(hall, 'logs')).toBe(true);
+    expect(w.accepts(hall, 'stone')).toBe(false);
+    // A deposit of an unsorted good never lands here, whatever else does with
+    // it — the opening village has more than one depot.
+    const before = hall.inv.stone ?? 0;
+    w.addToStock('stone', 5, hall.cx, hall.cy);
+    expect(hall.inv.stone ?? 0).toBe(before);
+
+    // And the stone already inside is queued to leave rather than stranded.
+    placeNear(w, 'storehouse');
+    w.refreshStockCache();
+    rebuildHaulJobs(w);
+    const eviction = w.haulJobs.find((j) => j.fromId === hall.id && j.good === 'stone');
+    expect(eviction, 'la pierre reste bloquée dans un dépôt qui la refuse').toBeTruthy();
+  });
+
+  it('treats "everything ticked" as everything, not as today’s catalogue', () => {
+    const sim = createNewGame({ seed: 'sorting-all' });
+    const w = sim.world;
+    const hall = w.buildingList.find((b) => b.def === 'town_hall')!;
+    w.setSorting(hall, w.sortableGoods(hall));
+    // Null, not a frozen list: a depot built today must still take a good
+    // that only exists once its study lands.
+    expect(hall.sorting).toBeNull();
   });
 });

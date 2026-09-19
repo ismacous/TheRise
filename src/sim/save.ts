@@ -16,8 +16,8 @@ import { TRADE_PARTNERS } from '../data/trade';
  * A version 5 village would load with a founding cohort already past working
  * age and a larder sized for the old two-minute day.
  */
-export const SAVE_VERSION = 7;
-export const SAVE_KEY = 'therise.save.v7';
+export const SAVE_VERSION = 8;
+export const SAVE_KEY = 'therise.save.v8';
 
 interface NodeDiff {
   /** Ids present in the freshly generated world that no longer exist. */
@@ -177,6 +177,7 @@ export function deserialize(data: SaveData): Simulation {
       recipeIndex: raw.recipeIndex ?? 0,
       level: raw.level ?? 1,
       upgrade: raw.upgrade ? { ...raw.upgrade } : null,
+      sorting: raw.sorting ? [...raw.sorting] : null,
       repairing: raw.repairing ?? false,
       demolish: raw.demolish ? { ...raw.demolish } : null,
       // Measured output is not worth saving: half a minute of play rebuilds it,

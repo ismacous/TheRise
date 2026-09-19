@@ -101,6 +101,14 @@ export interface Building {
   delivered: Partial<Record<GoodId, number>>;
   /** Local inventory (inputs and outputs). */
   inv: Partial<Record<GoodId, number>>;
+  /**
+   * What this depot has been told to hold, or null for "whatever it can".
+   *
+   * Null rather than a full list on purpose: a depot built before a good
+   * existed should still take it once the study lands, and a saved game
+   * should not freeze the catalogue as it stood the day it was saved.
+   */
+  sorting: GoodId[] | null;
   /** Villager ids currently employed here. */
   workers: number[];
   /** Villager ids living here (housing). */

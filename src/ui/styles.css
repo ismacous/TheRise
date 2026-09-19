@@ -601,6 +601,47 @@ body {
   flex: 0 0 auto;
 }
 
+/*
+ * A depot's sorting list. Two columns of tappable rows: at thirty-four goods
+ * a single column is a scroll, and a wrapping chip row makes every entry a
+ * different width, which is exactly what you do not want in a list you scan
+ * for one name.
+ */
+.sort-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 5px;
+  margin-top: 4px;
+}
+
+.sort-chip {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 9px;
+  border-radius: var(--radius);
+  border: 1px solid var(--panel-line);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--ink-faint);
+  font-size: 11.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sort-chip .dot {
+  opacity: 0.35;
+}
+
+.sort-chip.on {
+  border-color: var(--gold);
+  background: rgba(214, 170, 82, 0.13);
+  color: var(--ink);
+}
+
+.sort-chip.on .dot {
+  opacity: 1;
+}
+
 /* ── Cards ── ────────────────────────────────────────────────────────────── */
 .card-grid {
   display: grid;

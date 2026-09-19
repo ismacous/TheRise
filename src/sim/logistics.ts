@@ -70,6 +70,26 @@ export function rebuildHaulJobs(world: World): void {
     // see `sim/supply.ts`.
     if (b.state !== 'active') continue;
 
+    // 2a. A depot that has been narrowed sends away what it no longer sorts.
+    //
+    // Without this the feature is a trap: tell a warehouse to keep only ore
+    // and the grain already inside it sits there for ever, counted in the
+    // village's stock and reachable by nobody who was looking for a granary.
+    if (def.storage?.global && b.sorting) {
+      for (const [g, amount] of Object.entries(b.inv)) {
+        const good = g as GoodId;
+        if ((amount as number) <= 0 || world.accepts(b, good)) continue;
+        if (claimedKey.has(`${b.id}:-1:${g}`)) continue;
+        push(world, jobs, {
+          good,
+          amount: amount as number,
+          fromId: b.id,
+          toId: -1,
+          priority: 5,
+        });
+      }
+    }
+
     // 2. Ship finished goods out to the storehouses.
     if (!def.storage?.global) {
       for (const g of outputGoods(b)) {
