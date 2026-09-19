@@ -20,10 +20,10 @@ const WHITE = new Color(1, 1, 1);
 const MAX_VILLAGERS = 900;
 
 /**
- * Villagers are drawn as four instanced meshes — clothes, skin, hair/hat and
- * the carried load — so the whole population costs four draw calls no matter
- * how large the village grows. Per-instance colour gives every villager their
- * own skin tone, hair and profession outfit.
+ * Villagers are drawn as five instanced meshes — clothes, skin, hair/hat, the
+ * carried load and the depot porters' handcart — so the whole population costs
+ * five draw calls no matter how large the village grows. Per-instance colour
+ * gives every villager their own skin tone, hair and profession outfit.
  */
 export class VillagerRenderer {
   readonly group = new Group();
@@ -31,6 +31,7 @@ export class VillagerRenderer {
   private skin: InstancedMesh;
   private hair: InstancedMesh;
   private load: InstancedMesh;
+  private cart: InstancedMesh;
   private dummy = new Object3D();
   private matrix = new Matrix4();
   private color = new Color();
@@ -42,8 +43,9 @@ export class VillagerRenderer {
     this.skin = this.makeInstanced(buildSkinGeometry(), 'villager-skin');
     this.hair = this.makeInstanced(buildHairGeometry(), 'villager-hair');
     this.load = this.makeInstanced(buildLoadGeometry(), 'villager-load');
+    this.cart = this.makeInstanced(buildCartGeometry(), 'villager-cart');
     this.group.name = 'villagers';
-    this.group.add(this.tunic, this.skin, this.hair, this.load);
+    this.group.add(this.tunic, this.skin, this.hair, this.load, this.cart);
   }
 
   private makeInstanced(geo: BufferGeometry, name: string): InstancedMesh {
@@ -61,6 +63,7 @@ export class VillagerRenderer {
     const villagers = world.villagers;
     const n = Math.min(villagers.length, MAX_VILLAGERS);
     let loadCount = 0;
+    let cartCount = 0;
 
     for (let i = 0; i < n; i++) {
       const v = villagers[i];
@@ -107,14 +110,24 @@ export class VillagerRenderer {
       this.hair.setColorAt(i, this.color);
 
       if (v.carrying) {
-        d.position.y += 0.62 * scale;
+        // A depot's own porter pulls a handcart — which is also exactly who
+        // carries the extra load the cart is worth in the simulation.
+        const carted = v.profession === 'carrier';
+        d.position.set(x, ground + (carted ? 0.02 : gait + breathe + 0.62 * scale), y);
         d.rotation.set(0, -angle + Math.PI / 2, 0);
         d.scale.setScalar(scale);
         d.updateMatrix();
-        this.load.setMatrixAt(loadCount, d.matrix);
-        this.color.set(GOODS[v.carrying].color).convertSRGBToLinear();
-        this.load.setColorAt(loadCount, this.color);
-        loadCount++;
+        if (carted) {
+          this.cart.setMatrixAt(cartCount, d.matrix);
+          this.color.set(GOODS[v.carrying].color).convertSRGBToLinear();
+          this.cart.setColorAt(cartCount, this.color);
+          cartCount++;
+        } else {
+          this.load.setMatrixAt(loadCount, d.matrix);
+          this.color.set(GOODS[v.carrying].color).convertSRGBToLinear();
+          this.load.setColorAt(loadCount, this.color);
+          loadCount++;
+        }
       }
     }
 
@@ -122,8 +135,9 @@ export class VillagerRenderer {
     this.skin.count = n;
     this.hair.count = n;
     this.load.count = loadCount;
+    this.cart.count = cartCount;
 
-    for (const mesh of [this.tunic, this.skin, this.hair, this.load]) {
+    for (const mesh of [this.tunic, this.skin, this.hair, this.load, this.cart]) {
       mesh.instanceMatrix.needsUpdate = true;
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     }
@@ -144,7 +158,9 @@ export class VillagerRenderer {
   }
 
   dispose(): void {
-    for (const mesh of [this.tunic, this.skin, this.hair, this.load]) mesh.geometry.dispose();
+    for (const mesh of [this.tunic, this.skin, this.hair, this.load, this.cart]) {
+      mesh.geometry.dispose();
+    }
     this.material.dispose();
   }
 }
@@ -188,5 +204,34 @@ function buildLoadGeometry(): BufferGeometry {
   const b = new MeshBuilder();
   // A crate held at chest height in front of the villager.
   b.box(0.16, 0, 0, 0.18, 0.16, 0.22, WHITE);
+  return b.build();
+}
+
+/**
+ * The depot porter's handcart, dragged behind them. Only the load takes the
+ * instance colour; the frame and wheels are baked in, which keeps the whole
+ * thing to one draw call.
+ */
+function buildCartGeometry(): BufferGeometry {
+  const b = new MeshBuilder();
+  const wood = new Color('#8a6034').convertSRGBToLinear();
+  const beam = new Color('#6b4a2c').convertSRGBToLinear();
+  const iron = new Color('#6f7378').convertSRGBToLinear();
+  // Shafts running forward to the porter's hands.
+  for (const sz of [-1, 1]) {
+    b.box(0.02, 0.28, sz * 0.1, 0.42, 0.035, 0.035, beam);
+  }
+  // Bed and sides.
+  b.box(-0.28, 0.24, 0, 0.38, 0.045, 0.3, wood);
+  for (const sz of [-1, 1]) b.box(-0.28, 0.31, sz * 0.15, 0.38, 0.13, 0.035, wood);
+  b.box(-0.47, 0.31, 0, 0.035, 0.13, 0.3, wood);
+  // Wheels, and the axle between them.
+  for (const sz of [-1, 1]) {
+    b.disc(-0.28, 0.16, sz * 0.19, 0.16, 0.045, 9, beam);
+    b.disc(-0.28, 0.16, sz * 0.19, 0.05, 0.06, 6, iron);
+  }
+  b.bar(-0.28, 0.16, 0, 0.022, 0.4, 5, iron, 'z');
+  // The load itself, which takes the instance colour.
+  b.box(-0.28, 0.33, 0, 0.3, 0.14, 0.22, WHITE);
   return b.build();
 }

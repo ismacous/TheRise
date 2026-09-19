@@ -50,6 +50,15 @@ export function serviceRadius(b: Building): number {
   return s ? s.radius * radiusMultiplier(b) : 0;
 }
 
+/**
+ * How far a depot's own porters go looking for goods to bring in. Zero for
+ * anything that is not a collecting depot.
+ */
+export function collectRadius(b: Building): number {
+  const r = BUILDINGS[b.def].storage?.collect ?? 0;
+  return r > 0 ? r * radiusMultiplier(b) : 0;
+}
+
 export function storageCapacity(b: Building): number {
   const def = BUILDINGS[b.def];
   if (!def.storage) return 0;

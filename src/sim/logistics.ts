@@ -1,6 +1,6 @@
 import { BUILDINGS } from '../data/buildings';
 import { GOODS, type GoodId } from '../data/goods';
-import { storageCapacity } from './levels';
+import { collectRadius, storageCapacity } from './levels';
 import { activeRecipe, currentInputs, currentOutputs } from './recipes';
 import type { Building, HaulJob } from './types';
 import type { World } from './world';
@@ -18,7 +18,12 @@ export const inputGoods = currentInputs;
  * suits") to a concrete building straight away. Resolving lazily meant every
  * idle villager re-scanned every storehouse for every job, every tick.
  */
-function push(world: World, jobs: HaulJob[], j: Omit<HaulJob, 'id' | 'claimedBy'>): void {
+function push(
+  world: World,
+  jobs: HaulJob[],
+  j: Omit<HaulJob, 'id' | 'claimedBy'>,
+  queued?: Set<string>,
+): void {
   if (jobs.length >= MAX_JOBS) return;
   let { fromId, toId } = j;
   if (fromId === -1) {
@@ -34,6 +39,7 @@ function push(world: World, jobs: HaulJob[], j: Omit<HaulJob, 'id' | 'claimedBy'
     toId = store.id;
   }
   if (fromId === toId) return;
+  queued?.add(`${fromId}:${toId}:${j.good}`);
   jobs.push({ ...j, fromId, toId, id: world.allocJobId(), claimedBy: 0 });
 }
 
@@ -45,6 +51,9 @@ export function rebuildHaulJobs(world: World): void {
   const kept = world.haulJobs.filter((j) => j.claimedBy !== 0);
   const jobs: HaulJob[] = [...kept];
   const claimedKey = new Set(kept.map((j) => `${j.fromId}:${j.toId}:${j.good}`));
+  // Jobs queued during this rebuild, so a collection round never scans the
+  // whole board looking for a duplicate of itself.
+  const queuedKey = new Set(claimedKey);
 
   const foodShort = world.stats.foodDays < 4;
 
@@ -139,7 +148,53 @@ export function rebuildHaulJobs(world: World): void {
       }
     }
 
-    // 5. Chapel and scholars burn candles.
+    // 5. A staffed depot sends its own porters out on a round.
+    //
+    // Rule 2 already offers a workshop's output to whoever is nearest, but it
+    // only fires once a workshop has a full load waiting. A depot with people
+    // in it does better than that: it empties the small stuff too, so a
+    // carpenter is never sitting on three chairs nobody thought worth a trip.
+    if (def.storage?.global && def.storage.collect && b.workers.length > 0) {
+      const radius = collectRadius(b);
+      const free = storageCapacity(b) - world.usedOf(b);
+      // One round per porter on duty. Queueing a job for every workshop in
+      // range every second would fill the board and cost a scan of the whole
+      // village for each depot.
+      let rounds = b.workers.length;
+      if (free > 12) {
+        for (const source of world.buildingList) {
+          if (rounds <= 0) break;
+          if (source.id === b.id || source.state !== 'active') continue;
+          const sourceDef = BUILDINGS[source.def];
+          if (sourceDef.storage?.global || sourceDef.service?.kind === 'market') continue;
+          if ((source.cx - b.cx) ** 2 + (source.cy - b.cy) ** 2 > radius * radius) continue;
+          for (const g of outputGoods(source)) {
+            const have = source.inv[g] ?? 0;
+            if (have < 1) continue;
+            if (!world.accepts(b, g)) continue;
+            if (queuedKey.has(`${source.id}:${b.id}:${g}`)) continue;
+            push(
+              world,
+              jobs,
+              {
+                good: g,
+                amount: have,
+                fromId: source.id,
+                toId: b.id,
+                // Above ordinary shipping, below construction and food relief,
+                // so a collection round never starves a building site.
+                priority: 4,
+              },
+              queuedKey,
+            );
+            rounds--;
+            break;
+          }
+        }
+      }
+    }
+
+    // 6. Chapel and scholars burn candles.
     if ((b.def === 'chapel' || b.def === 'university') && (b.inv.candles ?? 0) < 10) {
       if (world.stockOf('candles') > 0 && !claimedKey.has(`-1:${b.id}:candles`)) {
         push(world, jobs, { good: 'candles', amount: 8, fromId: -1, toId: b.id, priority: 2 });

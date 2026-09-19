@@ -5,6 +5,8 @@ import { happinessTarget } from '../src/sim/villagers';
 import { BUILDINGS, type BuildingId } from '../src/data/buildings';
 import { ALL_RESEARCH_IDS } from '../src/data/research';
 import { CROP_STAGES, cropStage } from '../src/render/buildings';
+import { collectRadius, maxLevelOf, workerSlots } from '../src/sim/levels';
+import { rebuildHaulJobs } from '../src/sim/logistics';
 import type { World } from '../src/sim/world';
 
 function run(sim: Simulation, seconds: number): void {
@@ -249,5 +251,66 @@ describe('the field through its year', () => {
       expect(s).toBeGreaterThanOrEqual(0);
       expect(s).toBeLessThan(CROP_STAGES);
     }
+  });
+});
+
+describe('depots that fetch', () => {
+  /**
+   * A warehouse used to be a shed: goods only reached it because the general
+   * labour pool happened to pick up a shipping job, and only once a workshop
+   * had a full load waiting. Staffing one now buys a collection round.
+   */
+  it('sends its own porters out for what the workshops have made', () => {
+    const sim = createNewGame({ seed: 'depot' });
+    const w = sim.world;
+    fund(w);
+
+    const depot = w.buildingList.find((b) => b.def === 'storehouse')!;
+    // `fund` fills both depots to the brim; a full shed has nothing to collect
+    // into, which is correct behaviour and not what this test is about.
+    depot.inv = {};
+    w.refreshStockCache();
+    expect(collectRadius(depot)).toBeGreaterThan(0);
+    while (depot.workers.length < workerSlots(depot) && w.assignWorker(depot.id)) {
+      /* staff the depot */
+    }
+    expect(depot.workers.length).toBeGreaterThan(0);
+
+    // A workshop sitting on a part load — under the threshold that would make
+    // the ordinary shipping rule offer it to anyone.
+    const shop = placeNearStart(w, 'sawmill')!;
+    shop.inv.planks = 2;
+
+    rebuildHaulJobs(w);
+    const round = w.haulJobs.find(
+      (j) => j.fromId === shop.id && j.toId === depot.id && j.good === 'planks',
+    );
+    expect(round).toBeTruthy();
+  });
+
+  it('stays quiet while nobody is staffing it', () => {
+    const sim = createNewGame({ seed: 'depot-empty' });
+    const w = sim.world;
+    fund(w);
+    const depot = w.buildingList.find((b) => b.def === 'storehouse')!;
+    depot.inv = {};
+    w.refreshStockCache();
+    depot.workers.length = 0;
+    const shop = placeNearStart(w, 'sawmill')!;
+    shop.inv.planks = 2;
+
+    rebuildHaulJobs(w);
+    expect(w.haulJobs.some((j) => j.fromId === shop.id && j.toId === depot.id)).toBe(false);
+  });
+
+  it('reaches further as it is improved', () => {
+    const sim = createNewGame({ seed: 'depot-level' });
+    const w = sim.world;
+    const depot = w.buildingList.find((b) => b.def === 'storehouse')!;
+    const atOne = collectRadius(depot);
+    depot.level = 3;
+    expect(collectRadius(depot)).toBeGreaterThan(atOne);
+    // And its shed grows with it, like every other building's.
+    expect(maxLevelOf('warehouse')).toBeGreaterThan(1);
   });
 });

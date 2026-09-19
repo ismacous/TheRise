@@ -4,7 +4,7 @@ import { SoundEngine } from './render/audio';
 import { HEIGHT_SCALE } from './render/constants';
 import { createNewGame, type Simulation } from './sim/simulation';
 import { deserialize, readSave, writeSave } from './sim/save';
-import { gatherRadius } from './sim/levels';
+import { collectRadius, gatherRadius } from './sim/levels';
 import type { Building } from './sim/types';
 import type { World } from './sim/world';
 import type { WorldGenOptions } from './sim/worldgen';
@@ -467,7 +467,10 @@ export class Game implements GameApi {
         markers.showSelection(b.cx, y, b.cy, Math.max(b.w, b.h) * 0.75);
         const service = BUILDINGS[b.def].service;
         const gather = BUILDINGS[b.def].gather;
-        const radius = service && service.radius > 0 ? service.radius : gather?.radius;
+        const radius =
+          service && service.radius > 0
+            ? service.radius
+            : (gather?.radius ?? (collectRadius(b) || undefined));
         if (radius) markers.showRadius(b.cx, y, b.cy, radius);
       } else {
         this.selectedBuildingId = null;

@@ -111,8 +111,12 @@ export interface BuildingDef {
   recipes?: Recipe[];
   housing?: HousingSpec;
   service?: ServiceSpec;
-  /** General or filtered storage. */
-  storage?: { capacity: number; accepts?: GoodId[]; global?: boolean };
+  /**
+   * General or filtered storage. `collect` is the radius, in tiles, within
+   * which this depot's own staff go out to fetch finished goods from the
+   * workshops instead of waiting for somebody to bring them.
+   */
+  storage?: { capacity: number; accepts?: GoodId[]; global?: boolean; collect?: number };
   /** Pasture animals raised on site. */
   livestock?: { animal: 'chicken' | 'sheep' | 'cattle'; capacity: number };
   upgradesTo?: BuildingId;
@@ -297,7 +301,7 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     workers: 2,
     profession: 'carrier',
     placement: { kind: 'land' },
-    storage: { capacity: 500, global: true },
+    storage: { capacity: 500, global: true, collect: 22 },
     upgradesTo: 'warehouse',
     tier: 1,
     fireRisk: 1.2,
@@ -315,7 +319,7 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     profession: 'carrier',
     placement: { kind: 'land' },
     requires: 'r_logistics',
-    storage: { capacity: 1400, global: true },
+    storage: { capacity: 1400, global: true, collect: 40 },
     tier: 2,
     fireRisk: 0.9,
     desc: "Quais de déchargement et porteurs supplémentaires.",

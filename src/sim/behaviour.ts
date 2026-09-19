@@ -228,12 +228,17 @@ export function hasAllMaterials(_world: World, b: Building): boolean {
 function claimHaulJob(world: World, v: Villager) {
   let best: HaulJob | null = null;
   let bestScore = Infinity;
+  // A porter employed at a depot answers to that depot first: its own rounds
+  // are what the player staffed it for, and a warehouse whose people wander
+  // off to the far side of the village is a warehouse that does nothing.
+  const depotId = v.workId;
   for (const job of world.haulJobs) {
     if (job.claimedBy !== 0) continue;
     const from = world.buildings.get(job.fromId);
     if (!from) continue;
     const d = (from.cx - v.x) ** 2 + (from.cy - v.y) ** 2;
-    const score = d - job.priority * 900;
+    const ownRound = depotId !== 0 && job.toId === depotId ? 2200 : 0;
+    const score = d - job.priority * 900 - ownRound;
     if (score < bestScore) {
       bestScore = score;
       best = job;

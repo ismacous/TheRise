@@ -264,6 +264,25 @@ Un **tableau de tâches** est reconstruit chaque seconde et couvre cinq besoins 
 Les tâches déjà prises par un porteur sont conservées d'un cycle à l'autre :
 personne n'est jamais détourné d'une livraison en cours.
 
+### Les dépôts font leur tournée
+
+Un entrepôt n'était qu'un hangar : les biens n'y arrivaient que parce qu'un
+villageois du vivier général passait par là, et seulement une fois qu'un
+atelier avait une pleine charge en attente. Un dépôt **doté de porteurs** fait
+maintenant sa tournée : chacun de ses employés va chercher ce qui s'accumule
+dans un atelier de son rayon, même les petites quantités, et le ramène.
+
+| | Rayon de tournée au niveau I |
+|---|---|
+| Entrepôt | 22 cases |
+| Grand entrepôt | 40 cases |
+
+Le rayon grandit avec le niveau, comme tous les rayons du jeu. Un porteur
+affecté à un dépôt privilégie les tâches qui y mènent : c'est pour ça qu'on
+l'a affecté là. Et il tire une **charrette** — la même qui lui vaut déjà 60 %
+de charge en plus dans la simulation. Elle coûte un sixième appel de rendu
+pour toute la population, quelle qu'en soit la taille.
+
 Un marché ne stocke qu'environ un jour de consommation par denrée, afin qu'il
 ne vide pas les entrepôts — et les réserves de nourriture comptent aussi bien le
 contenu des marchés que celui des entrepôts.

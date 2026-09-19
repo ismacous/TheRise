@@ -31,6 +31,7 @@ import {
 } from '../sim/economy';
 import { activeObjectives, OBJECTIVES } from '../sim/objectives';
 import {
+  collectRadius,
   displayName,
   gatherRadius,
   housingCapacity,
@@ -1632,7 +1633,24 @@ function renderBuilding(api: GameApi, body: HTMLElement, refresh: Refresh): void
   if (def.storage) {
     stats.append(statBox('Stock', `${Math.round(w.usedOf(b))}/${w.capacityOf(b)}`));
   }
+  if (collectRadius(b) > 0) {
+    stats.append(statBox('Tournée', `${Math.round(collectRadius(b))} cases`));
+  }
   if (stats.children.length > 0) body.append(stats);
+
+  // A depot with nobody in it is a shed: say so, because the collection round
+  // is the whole reason to staff one.
+  if (def.storage?.collect) {
+    body.append(
+      el('div', {
+        class: 'card-desc',
+        text:
+          b.workers.length > 0
+            ? `${b.workers.length} porteur(s) font la tournée des ateliers dans ce rayon et ramènent ce qui s'y accumule.`
+            : "Sans porteur, ce dépôt ne fait que stocker. Affectez-y quelqu'un pour qu'il aille chercher les productions alentour.",
+      }),
+    );
+  }
 
   if (b.stall) body.append(el('div', { class: 'empty-note', text: `Arrêt : ${b.stall}` }));
 
