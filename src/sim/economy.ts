@@ -113,7 +113,7 @@ export function orderBuy(world: World, partnerId: string, good: GoodId, amount: 
     state: 'outbound',
   };
   world.contracts.push(c);
-  world.notify(`Caravane partie vers ${p.name} — achat de ${qty} ${GOODS[good].name}`, '🐎', 'neutral');
+  world.notify(`Caravane partie vers ${p.name} — achat de ${qty} ${GOODS[good].name}`, 'cart', 'neutral');
   return { ok: true, reason: '' };
 }
 
@@ -144,7 +144,7 @@ export function orderSell(world: World, partnerId: string, good: GoodId, amount:
     state: 'outbound',
   };
   world.contracts.push(c);
-  world.notify(`Caravane partie vers ${p.name} — vente de ${qty} ${GOODS[good].name}`, '🐎', 'neutral');
+  world.notify(`Caravane partie vers ${p.name} — vente de ${qty} ${GOODS[good].name}`, 'cart', 'neutral');
   return { ok: true, reason: '' };
 }
 
@@ -163,18 +163,18 @@ export function updateEconomy(world: World, dt: number): void {
         world.earn(leftover * c.unitPrice * 0.5, 'trade');
         world.notify(
           `Entrepôts pleins : ${leftover} ${GOODS[c.good].name} revendus à perte`,
-          '⚠️',
+          'warn',
           'bad',
         );
       }
-      world.notify(`${c.amount} ${GOODS[c.good].name} livrés par ${p.name}`, '📦', 'good');
+      world.notify(`${c.amount} ${GOODS[c.good].name} livrés par ${p.name}`, 'box', 'good');
     } else {
       const income = c.amount * c.unitPrice;
       world.earn(income, 'trade');
       world.tradeIncomeWindow += income;
       world.notify(
         `${p.name} paie ${Math.round(income)} pièces pour ${c.amount} ${GOODS[c.good].name}`,
-        '💰',
+        'coin',
         'good',
       );
     }

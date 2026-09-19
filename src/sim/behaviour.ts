@@ -585,7 +585,7 @@ function doBuild(world: World, v: Villager, dt: number): void {
     b.state = 'active';
     b.efficiency = 0;
     world.emitter.emit('buildingCompleted', b);
-    world.notify(`${def.name} terminé`, '🏗️', 'good', b.cx, b.cy);
+    world.notify(`${def.name} terminé`, 'build', 'good', b.cx, b.cy);
     clearTask(v);
   }
 }

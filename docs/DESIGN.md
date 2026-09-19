@@ -274,6 +274,29 @@ d'urgence coûteux en temps plutôt qu'interdit.
 
 ---
 
+## 8 bis. L'interface
+
+Du DOM simple, sans framework, et **sans un seul emoji**. Ils rendaient
+différemment d'une version d'Android à l'autre, imposaient leurs propres
+couleurs et devenaient illisibles à la taille d'une pastille de HUD.
+
+- **Glyphes.** `src/ui/icons.ts` dessine une cinquantaine d'icônes en SVG sur
+  une grille de 24, tracées en `currentColor` : la palette de la page les teinte
+  et un chip de 12 pixels reste lisible.
+- **Pastilles.** Une ressource ou un métier s'identifie par sa couleur, pas par
+  un pictogramme. Un test vérifie que deux ressources n'ont jamais la même.
+- **Avatars.** L'initiale du villageois sur la couleur de sa tunique — celle
+  qu'il porte sur la carte.
+- **Barre de ressources.** Trois ressources épinglées et une jauge d'entrepôt,
+  sur une ligne qui ne défile pas. L'ancienne barre listait les vingt-huit
+  ressources et le chiffre qu'on cherchait était toujours hors de l'écran. La
+  page **Ressources** montre le reste, groupé par catégorie ; on y épingle ce
+  qu'on veut voir en haut.
+- **Pages plein écran.** `.sheet.full` et l'ensemble `FULL_SHEETS` : Savoir,
+  Économie et Ressources s'y affichent.
+
+---
+
 ## 9. Rendu
 
 - **Terrain** : deux triangles par tuile, découpé en chunks de 26 tuiles,

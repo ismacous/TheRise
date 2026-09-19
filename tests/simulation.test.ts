@@ -266,13 +266,20 @@ describe('trade', () => {
 });
 
 describe('goods catalogue', () => {
-  it('has a French name, icon and colour for every good', () => {
+  it('has a French name, a short label and a distinct colour for every good', () => {
+    const seen = new Set<string>();
     for (const id of ALL_GOOD_IDS) {
       const g = GOODS[id];
       expect(g.name.length).toBeGreaterThan(1);
-      expect(g.icon.length).toBeGreaterThan(0);
+      // The interface identifies a good by its pastille and its short label,
+      // so both have to exist and the colour has to be a real one.
+      expect(g.short.length).toBeGreaterThan(1);
+      expect(g.short.length).toBeLessThanOrEqual(12);
       expect(g.color).toMatch(/^#[0-9a-f]{6}$/i);
       expect(g.value).toBeGreaterThan(0);
+      seen.add(g.color.toLowerCase());
     }
+    // Pastilles that repeat make two goods look like the same thing.
+    expect(seen.size).toBe(ALL_GOOD_IDS.length);
   });
 });

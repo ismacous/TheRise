@@ -20,7 +20,9 @@ Jeu de gestion médiéval pour Android. Lisez `docs/DESIGN.md` avant de toucher
    (`yardDepth` / `yardZ`) : un accessoire posé au bord de l'emprise finit
    *dans* les murs et ne se voit jamais.
 4. **L'interface est du DOM simple.** Pas de framework, pas de bundler
-   supplémentaire.
+   supplémentaire. **Aucun emoji** : les glyphes vivent dans
+   `src/ui/icons.ts` (SVG tracé en `currentColor`), une ressource ou un métier
+   s'identifie par sa pastille de couleur, un villageois par son initiale.
 
 ## Avant de pousser
 

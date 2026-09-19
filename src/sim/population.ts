@@ -246,7 +246,7 @@ export function removeVillager(world: World, v: Villager, cause: string): void {
   world.villagerById.delete(v.id);
   world.emitter.emit('villagerDied', { villager: v, cause });
   if (cause !== 'vieillesse' && cause !== 'départ') {
-    world.notify(`${fullName(v)} est mort·e de ${cause}`, '🪦', 'bad', v.x, v.y);
+    world.notify(`${fullName(v)} est mort·e de ${cause}`, 'grave', 'bad', v.x, v.y);
   }
 }
 
@@ -274,7 +274,7 @@ export function updateEmigration(world: World, dt: number): void {
     if (world.rng.next() >= p) continue;
     const name = fullName(v);
     removeVillager(world, v, 'départ');
-    world.notify(`${name} quitte le village`, '🚪', 'bad');
+    world.notify(`${name} quitte le village`, 'leave', 'bad');
     // One departure per tick keeps the exodus legible rather than sudden.
     break;
   }
@@ -299,7 +299,7 @@ export function updateImmigration(world: World, dt: number): void {
   }
   world.notify(
     group === 1 ? 'Un voyageur s’installe au village' : `${group} nouveaux venus s’installent`,
-    '🚶',
+    'arrive',
     'good',
     ex,
     ey,

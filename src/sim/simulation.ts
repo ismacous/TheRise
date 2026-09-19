@@ -163,7 +163,7 @@ function seasonLabel(s: Season): string {
   return { spring: 'Printemps', summer: 'Été', autumn: 'Automne', winter: 'Hiver' }[s];
 }
 function seasonIcon(s: Season): string {
-  return { spring: '🌸', summer: '☀️', autumn: '🍂', winter: '❄️' }[s];
+  return { spring: 'sun', summer: 'sun', autumn: 'harvest', winter: 'snow' }[s];
 }
 
 export function computeStats(w: World): void {
@@ -277,7 +277,7 @@ export function createNewGame(opts: NewGameOptions = {}): Simulation {
   computeStats(w);
   // A first point so the economy page has something to draw from minute one.
   w.history.push(w);
-  w.notify('Le village vous attend. Commencez par le bois.', '🪵', 'neutral', hallX, hallY);
+  w.notify('Le village vous attend. Commencez par le bois.', 'tree', 'neutral', hallX, hallY);
   return sim;
 }
 

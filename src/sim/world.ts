@@ -228,7 +228,7 @@ export class World {
   }
 
   // ── notifications ────────────────────────────────────────────────────────
-  notify(text: string, icon = 'ℹ️', tone: Notification['tone'] = 'neutral', fx?: number, fy?: number): void {
+  notify(text: string, icon = 'info', tone: Notification['tone'] = 'neutral', fx?: number, fy?: number): void {
     const n: Notification = {
       id: this.nextNotificationId++,
       text,

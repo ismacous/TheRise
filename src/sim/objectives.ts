@@ -37,7 +37,7 @@ const obj = (
 export const OBJECTIVES: Objective[] = [
   obj(
     'wood',
-    '🪓',
+    'tree',
     'Ouvrir un camp de bûcherons',
     "Placez-le au milieu des arbres : le rayon de coupe compte plus que la distance au village.",
     { gold: 50 },
@@ -45,7 +45,7 @@ export const OBJECTIVES: Objective[] = [
   ),
   obj(
     'sawmill',
-    '🪚',
+    'tool',
     'Construire une scierie',
     'Les rondins ne servent à rien tels quels. Les planches, si.',
     { gold: 80 },
@@ -53,7 +53,7 @@ export const OBJECTIVES: Objective[] = [
   ),
   obj(
     'food',
-    '🧺',
+    'harvest',
     'Nourrir le village',
     'Une hutte de cueilleur près des buissons à baies suffit pour commencer.',
     { gold: 60 },
@@ -61,7 +61,7 @@ export const OBJECTIVES: Objective[] = [
   ),
   obj(
     'houses',
-    '🛖',
+    'home',
     'Loger tout le monde',
     'Un villageois sans lit est un villageois malheureux — et qui ne fondera pas de famille.',
     { gold: 110 },
@@ -69,7 +69,7 @@ export const OBJECTIVES: Objective[] = [
   ),
   obj(
     'university',
-    '📚',
+    'research',
     'Fonder une université',
     "Aucune étude n'est possible sans elle. Affectez-y des érudits : chacun accélère la recherche.",
     { gold: 60 },
@@ -77,7 +77,7 @@ export const OBJECTIVES: Objective[] = [
   ),
   obj(
     'research',
-    '📜',
+    'scroll',
     'Financer votre première étude',
     "Ouvrez « Savoir » : chaque étude coûte des pièces et s'achève au bout d'un moment. Rien ne se débloque sans ça.",
     { gold: 40 },
@@ -85,7 +85,7 @@ export const OBJECTIVES: Objective[] = [
   ),
   obj(
     'forester',
-    '🌱',
+    'tree',
     'Planter une hutte de forestier',
     'Sans replantation, vos bûcherons finiront par annoncer « aucune ressource à portée ».',
     { gold: 120 },
@@ -93,7 +93,7 @@ export const OBJECTIVES: Objective[] = [
   ),
   obj(
     'market',
-    '🏪',
+    'trade',
     'Ouvrir un marché',
     'Les foyers viennent y chercher vivres et confort. Sans marché, le bonheur plafonne.',
     { gold: 200 },
@@ -101,7 +101,7 @@ export const OBJECTIVES: Objective[] = [
   ),
   obj(
     'pop20',
-    '👥',
+    'people',
     'Atteindre 20 habitants',
     'Plus de bras, plus de métiers possibles.',
     { gold: 260 },
@@ -109,7 +109,7 @@ export const OBJECTIVES: Objective[] = [
   ),
   obj(
     'stone',
-    '🪨',
+    'stone',
     'Exploiter la pierre',
     "Cherchez un affleurement rocheux : la carrière se bâtit directement dessus.",
     { gold: 180 },
@@ -117,7 +117,7 @@ export const OBJECTIVES: Objective[] = [
   ),
   obj(
     'bread',
-    '🍞',
+    'food',
     'Faire cuire du pain',
     'Champ → moulin → boulangerie. Trois bâtiments, et la famine appartient au passé.',
     { gold: 380 },
@@ -125,7 +125,7 @@ export const OBJECTIVES: Objective[] = [
   ),
   obj(
     'trade',
-    '⚖️',
+    'trade',
     'Ouvrir une route commerciale',
     'Le comptoir de commerce transforme vos surplus en or.',
     { gold: 310 },
@@ -133,7 +133,7 @@ export const OBJECTIVES: Objective[] = [
   ),
   obj(
     'clothes',
-    '👕',
+    'box',
     'Habiller vos villageois',
     'Élevage → laine → tissu → vêtements. La première vraie chaîne de confort.',
     { gold: 450 },
@@ -141,7 +141,7 @@ export const OBJECTIVES: Objective[] = [
   ),
   obj(
     'iron',
-    '⚒️',
+    'anvil',
     'Couler un lingot de fer',
     'Mine de fer et fonderie. Le fer ouvre les outils, la mer et les grands bâtiments.',
     { gold: 570 },
@@ -149,7 +149,7 @@ export const OBJECTIVES: Objective[] = [
   ),
   obj(
     'pop60',
-    '🏘️',
+    'home',
     'Devenir un gros bourg',
     '60 habitants, 50 % de bonheur et deux services.',
     { gold: 800 },
@@ -157,7 +157,7 @@ export const OBJECTIVES: Objective[] = [
   ),
   obj(
     'tools',
-    '🔨',
+    'build',
     'Forger des outils',
     'Les outils accélèrent tous vos récolteurs. Ils se remboursent en quelques jours.',
     { gold: 650 },
@@ -165,7 +165,7 @@ export const OBJECTIVES: Objective[] = [
   ),
   obj(
     'jewel',
-    '💍',
+    'gem',
     "Vendre de l'orfèvrerie",
     "Or, fonderie, atelier d'orfèvre. L'objet le plus cher du jeu.",
     { gold: 1300 },
@@ -173,7 +173,7 @@ export const OBJECTIVES: Objective[] = [
   ),
   obj(
     'city',
-    '🏰',
+    'village',
     'Fonder une cité',
     '220 habitants, 60 % de bonheur, cinq services. Le sommet de la vallée.',
     { gold: 2300 },
@@ -194,7 +194,7 @@ export function updateObjectives(w: World): void {
     w.earn(o.reward.gold, 'gift');
     w.notify(
       `Objectif atteint : ${o.title} (+${o.reward.gold} pièces)`,
-      '🏅',
+      'star',
       'good',
     );
   }

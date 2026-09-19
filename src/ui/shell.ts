@@ -1,55 +1,25 @@
 import { formatNumber } from '../core/util';
 import { BUILDINGS } from '../data/buildings';
-import { iconFor } from './panels';
+import { buildingIcon } from './panels';
 import { GOODS, type GoodId } from '../data/goods';
 import { TIER_NAMES } from '../sim/economy';
 import { SEASON_LABEL, type Notification } from '../sim/types';
 import { clear, el, onTap, setText } from './dom';
+import { icon, pastille, type IconName } from './icons';
+import { pinnedGoods, togglePin } from './stock';
 import type { GameApi, SheetId } from './api';
 import { renderSheet, sheetTitle } from './panels';
 import { hasUniversity } from '../sim/research';
 import { activeObjectives } from '../sim/objectives';
 import { Minimap } from './minimap';
 
-const WEATHER_ICON: Record<string, string> = {
-  clear: '☀️',
-  rain: '🌧️',
-  storm: '⛈️',
-  snow: '❄️',
-  fog: '🌫️',
+const WEATHER_ICON: Record<string, IconName> = {
+  clear: 'sun',
+  rain: 'rain',
+  storm: 'storm',
+  snow: 'snow',
+  fog: 'fog',
 };
-
-/** Goods always shown in the ticker, in this order. */
-const PRIMARY_GOODS: GoodId[] = [
-  'logs',
-  'planks',
-  'stone',
-  'bricks',
-  'coal',
-  'charcoal',
-  'iron_ingot',
-  'gold_ingot',
-  'tools',
-  'bread',
-  'meat',
-  'fish',
-  'smoked_fish',
-  'berries',
-  'eggs',
-  'wheat',
-  'flour',
-  'cloth',
-  'leather',
-  'wool',
-  'hide',
-  'clothes',
-  'boots',
-  'furniture',
-  'ale',
-  'candles',
-  'arrows',
-  'jewellery',
-];
 
 /** Sheets whose contents change while they are open. */
 /** Sheets rendered as a full page rather than a bottom drawer. */
@@ -70,12 +40,12 @@ const LIVE_SHEETS = new Set<SheetId>([
  */
 const SLOW_LIVE_SHEETS = new Set<SheetId>(['economy']);
 
-const DOCK: Array<{ id: SheetId; icon: string; label: string }> = [
-  { id: 'build', icon: '🔨', label: 'Bâtir' },
-  { id: 'research', icon: '📜', label: 'Savoir' },
-  { id: 'trade', icon: '⚖️', label: 'Commerce' },
-  { id: 'people', icon: '👥', label: 'Villageois' },
-  { id: 'village', icon: '🏰', label: 'Village' },
+const DOCK: Array<{ id: SheetId; icon: IconName; label: string }> = [
+  { id: 'build', icon: 'build', label: 'Bâtir' },
+  { id: 'research', icon: 'research', label: 'Savoir' },
+  { id: 'trade', icon: 'trade', label: 'Commerce' },
+  { id: 'people', icon: 'people', label: 'Villageois' },
+  { id: 'village', icon: 'village', label: 'Village' },
 ];
 
 /** The persistent chrome: top bar, resource ticker, dock, toasts and sheets. */
@@ -99,6 +69,7 @@ export class UiShell {
   minimap!: Minimap;
 
   private resChips = new Map<GoodId, { node: HTMLElement; value: HTMLElement }>();
+  /** Rebuilt only when the pinned set changes, not on every frame. */
   private vitalNodes = new Map<string, HTMLElement>();
   private seenNotifications = 0;
   private refreshTimer = 0;
@@ -119,15 +90,15 @@ export class UiShell {
 
     // Top bar -------------------------------------------------------------
     this.vitals = el('div', { class: 'vitals' });
-    for (const [key, icon] of [
-      ['pop', '👥'],
-      ['food', '🍞'],
-      ['happy', '😊'],
-      ['gold', '🪙'],
+    for (const [key, glyph] of [
+      ['pop', 'people'],
+      ['food', 'food'],
+      ['happy', 'mood'],
+      ['gold', 'coin'],
     ] as const) {
       const value = el('span', { class: 'vl', text: '0' });
       const node = el('div', { class: 'vital', 'data-k': key }, [
-        el('span', { class: 'ic', text: icon }),
+        icon(glyph as IconName, 'ic'),
         value,
       ]);
       // Money and morale are the two numbers the economy page explains, so
@@ -146,9 +117,10 @@ export class UiShell {
       const btn = el('button', {
         class: 'speed-btn',
         'data-speed': s,
-        text: s === 0 ? '⏸' : `${s}×`,
         'aria-label': s === 0 ? 'Pause' : `Vitesse ${s}`,
       });
+      if (s === 0) btn.append(icon('pause', 'ic'));
+      else btn.append(el('span', { text: `${s}×` }));
       onTap(btn, () => this.api.setSpeed(s));
       this.speeds.append(btn);
     }
@@ -165,7 +137,7 @@ export class UiShell {
     this.dock = el('div', { class: 'dock' });
     for (const item of DOCK) {
       const btn = el('button', { class: 'dock-btn', 'data-sheet': item.id }, [
-        el('span', { class: 'ic', text: item.icon }),
+        icon(item.icon, 'ic'),
         el('span', { text: item.label }),
       ]);
       onTap(btn, () => {
@@ -281,14 +253,17 @@ export class UiShell {
     const line1 = `${SEASON_LABEL[w.time.season]} · an ${w.time.year}`;
     const line2 = `Jour ${w.time.day} — ${String(hours).padStart(2, '0')}:${String(
       Math.floor(minutes / 10) * 10,
-    ).padStart(2, '0')} ${WEATHER_ICON[w.weather] ?? ''}`;
-    const wanted = `${line1}\n${line2}`;
+    ).padStart(2, '0')}`;
+    const wanted = `${line1}\n${line2}\n${w.weather}`;
     if (node.dataset.v !== wanted) {
       node.dataset.v = wanted;
       clear(node);
       node.append(
-        el('div', { class: 'clock-line', html: `<strong>${line1}</strong>` }),
-        el('div', { class: 'clock-line', text: line2 }),
+        el('div', { class: 'clock-line' }, [el('strong', { text: line1 })]),
+        el('div', { class: 'clock-line' }, [
+          el('span', { text: line2 }),
+          icon(WEATHER_ICON[w.weather] ?? 'sun', 'ic weather'),
+        ]),
       );
     }
     for (const btn of Array.from(this.speeds.children) as HTMLElement[]) {
@@ -296,28 +271,56 @@ export class UiShell {
     }
   }
 
+  /**
+   * Four pinned goods and a storage gauge, on one line that never scrolls.
+   * Tapping a chip unpins it; the gauge opens the full Ressources page.
+   */
   private updateResources(): void {
     const w = this.api.world;
-    for (const good of PRIMARY_GOODS) {
-      const amount = w.stockOf(good);
-      const known = this.resChips.get(good);
-      // Only show a resource once the village has actually seen some of it.
-      if (amount <= 0 && !known) continue;
-      if (!known) {
+    const pins = pinnedGoods();
+    const key = pins.join(',');
+    if (this.resources.dataset.pins !== key) {
+      this.resources.dataset.pins = key;
+      clear(this.resources);
+      this.resChips.clear();
+      for (const good of pins) {
         const value = el('span', { class: 'v', text: '0' });
-        const dot = el('span', { class: 'dot' });
-        dot.style.background = GOODS[good].color;
-        const node = el('div', { class: 'res-chip', title: GOODS[good].name }, [
-          dot,
+        const node = el('button', { class: 'res-chip', title: GOODS[good].name }, [
+          pastille(GOODS[good].color),
           el('span', { class: 'n', text: GOODS[good].short }),
           value,
         ]);
+        onTap(node, () => {
+          togglePin(good);
+          this.updateResources();
+        });
         this.resources.append(node);
         this.resChips.set(good, { node, value });
       }
-      const chip = this.resChips.get(good)!;
+      // Icon and bar only: the exact figure lives on the Ressources page, and
+      // three resource names plus a percentage do not fit on a 412-pixel line.
+      const gauge = el('button', { class: 'res-gauge', 'aria-label': 'Ressources' }, [
+        icon('stock', 'ic'),
+        el('div', { class: 'gauge-track' }, [el('div', { class: 'gauge-fill' })]),
+      ]);
+      onTap(gauge, () => this.api.openSheet('stock'));
+      this.resources.append(gauge);
+    }
+
+    for (const [good, chip] of this.resChips) {
+      const amount = w.stockOf(good);
       setText(chip.value, formatNumber(amount));
       chip.node.classList.toggle('low', amount <= 0);
+    }
+
+    const gauge = this.resources.querySelector('.res-gauge') as HTMLElement | null;
+    if (gauge) {
+      const ratio = w.stockCapacity > 0 ? w.stockUsed / w.stockCapacity : 0;
+      const fill = gauge.querySelector('.gauge-fill') as HTMLElement;
+      fill.style.width = `${Math.min(100, ratio * 100).toFixed(0)}%`;
+      gauge.title = `Entrepôts : ${Math.round(ratio * 100)} %`;
+      // A full store stops every chain upstream, so it has to look alarming.
+      gauge.classList.toggle('warn', ratio > 0.92);
     }
   }
 
@@ -351,7 +354,7 @@ export class UiShell {
     for (const e of events.slice(-3)) {
       this.eventsStrip.append(
         el('div', { class: `event-chip ${e.tone}` }, [
-          el('span', { text: e.icon }),
+          icon(e.icon as IconName, 'ic'),
           el('span', { text: e.title }),
         ]),
       );
@@ -372,7 +375,7 @@ export class UiShell {
       const fill = el('div', { class: 'objective-fill' });
       fill.style.width = `${Math.min(100, (done / target) * 100)}%`;
       this.objectiveChip.append(
-        el('span', { class: 'ic', text: next.icon }),
+        icon(next.icon as IconName, 'ic'),
         el('div', { class: 'objective-body' }, [
           el('div', { class: 'objective-title', text: next.title }),
           el('div', { class: 'objective-bar' }, [fill]),
@@ -417,7 +420,7 @@ export class UiShell {
     clear(this.buildBanner);
 
     const head = el('div', { class: 'place-head' }, [
-      el('span', { class: 'place-ic', text: iconFor(id) }),
+      buildingIcon(id, 'place-ic'),
       el('div', { class: 'grow' }, [
         el('div', { class: 'place-name', text: def.name }),
         el('div', { class: `place-hint ${valid || painting ? '' : 'bad'}`, text: hint }),
@@ -490,7 +493,7 @@ export class UiShell {
   private pushToast(n: Notification): void {
     this.seenNotifications++;
     const node = el('div', { class: `toast ${n.tone}` }, [
-      el('span', { text: n.icon }),
+      icon((n.icon || 'info') as IconName, 'ic'),
       el('span', { text: n.text }),
     ]);
     if (n.fx !== undefined && n.fy !== undefined) {
@@ -521,7 +524,7 @@ export class UiShell {
     const scroll = this.sheetBody.scrollTop;
     clear(this.sheetHead);
     const { title, sub } = sheetTitle(id, this.api);
-    const close = el('button', { class: 'sheet-close', text: '✕', 'aria-label': 'Fermer' });
+    const close = el('button', { class: 'sheet-close', 'aria-label': 'Fermer' }, [icon('close')]);
     onTap(close, () => this.api.closeSheet());
     this.sheetHead.append(
       el('div', {}, [

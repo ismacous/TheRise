@@ -10,6 +10,7 @@ export type SheetId =
   | 'trade'
   | 'people'
   | 'economy'
+  | 'stock'
   | 'village'
   | 'building'
   | 'villager'

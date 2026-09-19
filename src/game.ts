@@ -309,27 +309,27 @@ export class Game implements GameApi {
   async save(): Promise<void> {
     try {
       await writeSave(this.sim, this.genOptions);
-      this.world.notify('Partie sauvegardée', '💾', 'good');
+      this.world.notify('Partie sauvegardée', 'save', 'good');
     } catch (err) {
       console.error(err);
-      this.world.notify('Échec de la sauvegarde', '⚠️', 'bad');
+      this.world.notify('Échec de la sauvegarde', 'warn', 'bad');
     }
   }
 
   async load(): Promise<boolean> {
     const data = await readSave();
     if (!data) {
-      this.world.notify('Aucune sauvegarde trouvée', '📂', 'bad');
+      this.world.notify('Aucune sauvegarde trouvée', 'save', 'bad');
       return false;
     }
     try {
       const sim = deserialize(data);
       this.replaceSimulation(sim, data.gen);
-      this.world.notify('Partie chargée', '📂', 'good');
+      this.world.notify('Partie chargée', 'save', 'good');
       return true;
     } catch (err) {
       console.error(err);
-      this.world.notify('Sauvegarde illisible', '⚠️', 'bad');
+      this.world.notify('Sauvegarde illisible', 'warn', 'bad');
       return false;
     }
   }

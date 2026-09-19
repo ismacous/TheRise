@@ -55,11 +55,11 @@ export function updateWeather(world: World, dt: number): void {
     if (picked !== world.weather) {
       world.weather = picked;
       if (picked === 'rain') {
-        world.notify('La pluie tombe : récoltes accélérées, moral en baisse', '🌧️', 'neutral');
+        world.notify('La pluie tombe : récoltes accélérées, moral en baisse', 'rain', 'neutral');
       } else if (picked === 'storm') {
-        world.notify('Orage sur la vallée : tout le monde ralentit', '⛈️', 'bad');
+        world.notify('Orage sur la vallée : tout le monde ralentit', 'storm', 'bad');
       } else if (picked === 'snow') {
-        world.notify('La neige recouvre les toits', '❄️', 'neutral');
+        world.notify('La neige recouvre les toits', 'snow', 'neutral');
       }
     }
     // Weather holds for a good while: a sky that flips every minute reads as
@@ -104,7 +104,7 @@ export function updateFires(world: World, dt: number): void {
     if (b.fire <= OUT) {
       b.state = 'active';
       b.fire = 0;
-      world.notify(`Incendie maîtrisé : ${BUILDINGS[b.def].name}`, '💧', 'good', b.cx, b.cy);
+      world.notify(`Incendie maîtrisé : ${BUILDINGS[b.def].name}`, 'water', 'good', b.cx, b.cy);
       continue;
     }
     b.fire = clamp(b.fire + spreadRate * dt, 0, 1);
@@ -122,7 +122,7 @@ export function updateFires(world: World, dt: number): void {
     }
 
     if (b.fire >= 1) {
-      world.notify(`${BUILDINGS[b.def].name} détruit par les flammes`, '🔥', 'bad', b.cx, b.cy);
+      world.notify(`${BUILDINGS[b.def].name} détruit par les flammes`, 'fire', 'bad', b.cx, b.cy);
       world.removeBuilding(b.id, false);
     }
   }
@@ -134,7 +134,7 @@ export function igniteBuilding(world: World, b: Building): void {
   if (b.state !== 'active') return;
   b.state = 'burning';
   b.fire = 0.12;
-  world.notify(`Au feu ! ${BUILDINGS[b.def].name} brûle`, '🔥', 'bad', b.cx, b.cy);
+  world.notify(`Au feu ! ${BUILDINGS[b.def].name} brûle`, 'fire', 'bad', b.cx, b.cy);
   world.pushEvent({
     kind: 'fire',
     title: 'Incendie',
@@ -142,7 +142,7 @@ export function igniteBuilding(world: World, b: Building): void {
     duration: 90,
     severity: 1,
     targets: [b.id],
-    icon: '🔥',
+    icon: 'fire',
     tone: 'bad',
   });
 }
@@ -217,7 +217,7 @@ function startDisease(world: World): void {
     duration: 180,
     severity,
     targets: [],
-    icon: '🤒',
+    icon: 'illness',
     tone: 'bad',
   });
 }
@@ -232,7 +232,7 @@ function startBlessing(world: World): void {
     duration: 150,
     severity: 1,
     targets: [],
-    icon: '🌧️',
+    icon: 'rain',
     tone: 'neutral',
   });
 }
@@ -247,7 +247,7 @@ function startBumperCrop(world: World): void {
     duration: 30,
     severity: 1,
     targets: fields.map((f) => f.id),
-    icon: '🌾',
+    icon: 'wheat',
     tone: 'good',
   });
 }
@@ -273,7 +273,7 @@ function startWanderingFamily(world: World): void {
     duration: 25,
     severity: 1,
     targets: [],
-    icon: '👨‍👩‍👧',
+    icon: 'family',
     tone: 'good',
   });
 }
@@ -288,7 +288,7 @@ function startMerchantVisit(world: World): void {
     duration: 25,
     severity: 1,
     targets: [],
-    icon: '🧳',
+    icon: 'merchant',
     tone: 'good',
   });
 }
@@ -303,7 +303,7 @@ function startHarshSeason(world: World): void {
     duration: 240,
     severity: 1.35,
     targets: [],
-    icon: '🥶',
+    icon: 'snow',
     tone: 'bad',
   });
 }

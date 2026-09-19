@@ -1297,13 +1297,13 @@ export const BUILDINGS_BY_CATEGORY = (() => {
 })();
 
 export const CATEGORY_LABELS: Record<BuildingCategory, { name: string; icon: string }> = {
-  civic: { name: 'Civique', icon: '🏛️' },
-  housing: { name: 'Habitations', icon: '🏠' },
-  storage: { name: 'Stockage', icon: '📦' },
-  gathering: { name: 'Récolte', icon: '🪓' },
-  farming: { name: 'Agriculture', icon: '🌾' },
-  industry: { name: 'Industrie', icon: '⚙️' },
-  crafting: { name: 'Artisanat', icon: '🔨' },
-  service: { name: 'Services', icon: '⛪' },
-  infrastructure: { name: 'Voirie', icon: '🛤️' },
+  civic: { name: 'Civique', icon: 'village' },
+  housing: { name: 'Habitations', icon: 'home' },
+  storage: { name: 'Stockage', icon: 'box' },
+  gathering: { name: 'Récolte', icon: 'tree' },
+  farming: { name: 'Agriculture', icon: 'wheat' },
+  industry: { name: 'Industrie', icon: 'settings' },
+  crafting: { name: 'Artisanat', icon: 'build' },
+  service: { name: 'Services', icon: 'bell' },
+  infrastructure: { name: 'Voirie', icon: 'cart' },
 };

@@ -273,42 +273,94 @@ body {
 /* ── Resource ticker ────────────────────────────────────────────────────── */
 .resources {
   display: flex;
+  align-items: stretch;
+  justify-content: flex-start;
   gap: 5px;
-  overflow-x: auto;
-  scrollbar-width: none;
-  padding-bottom: 2px;
-  touch-action: pan-x;
-}
-
-.resources::-webkit-scrollbar {
-  display: none;
+  padding: 0;
+  min-width: 0;
 }
 
 .res-chip {
   display: flex;
   align-items: center;
   gap: 4px;
-  background: var(--panel);
-  backdrop-filter: blur(8px);
+  /* Sized by its own label, not forced to an equal share: "Planches" needs
+     more room than "Pain", and equal columns truncated both. */
+  flex: 0 1 auto;
+  min-width: 0;
+  padding: 5px 7px;
   border: 1px solid var(--panel-line);
-  border-radius: 20px;
-  padding: 3px 9px 3px 5px;
-  font-size: 12.5px;
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  backdrop-filter: blur(10px);
+  color: var(--ink);
+  font: inherit;
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  flex: 0 0 auto;
+  box-shadow: var(--shadow);
 }
 
-.res-chip .dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  flex: 0 0 auto;
+.res-chip .n {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink-dim);
+}
+
+.res-chip .v {
+  font-weight: 600;
 }
 
 .res-chip.low {
-  border-color: rgba(224, 112, 92, 0.6);
+  opacity: 0.5;
 }
+
+/* Storage gauge: the one number that explains a stalled village. */
+.res-gauge {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding: 5px 8px;
+  border: 1px solid var(--panel-line);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  backdrop-filter: blur(10px);
+  color: var(--ink-dim);
+  font: inherit;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  box-shadow: var(--shadow);
+}
+
+.res-gauge .gauge-track {
+  width: 40px;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+
+.res-gauge .gauge-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: 3px;
+  background: var(--gold);
+  transition: width 0.3s ease;
+}
+
+.res-gauge.warn {
+  border-color: rgba(224, 112, 92, 0.55);
+  color: var(--red);
+}
+
+.res-gauge.warn .gauge-fill {
+  background: var(--red);
+}
+
 
 /* ── Bottom dock ────────────────────────────────────────────────────────── */
 .dock {
@@ -1748,4 +1800,192 @@ body {
 
 .vital.tappable:active {
   background: rgba(255, 255, 255, 0.09);
+}
+
+/* ── Glyphs ─────────────────────────────────────────────────────────────── */
+.icon {
+  width: 1em;
+  height: 1em;
+  flex: none;
+  vertical-align: -0.14em;
+}
+
+.vital .ic,
+.dock-btn .ic,
+.res-gauge .ic {
+  width: 15px;
+  height: 15px;
+}
+
+.dock-btn .ic {
+  width: 20px;
+  height: 20px;
+}
+
+.speed-btn .ic {
+  width: 13px;
+  height: 13px;
+}
+
+.clock-line .ic.weather {
+  width: 13px;
+  height: 13px;
+  margin-left: 5px;
+  opacity: 0.85;
+}
+
+.card-title .ic,
+.offer-row .ic,
+.toast .ic,
+.event-chip .ic,
+.objective-chip .ic {
+  width: 17px;
+  height: 17px;
+  flex: none;
+}
+
+.objective-chip .ic {
+  width: 20px;
+  height: 20px;
+  color: var(--gold);
+}
+
+.sheet-close .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.toast.good .ic {
+  color: var(--green);
+}
+
+.toast.bad .ic {
+  color: var(--red);
+}
+
+.locked-note {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--ink-faint);
+}
+
+.sick-mark {
+  color: var(--red);
+  margin-left: 5px;
+}
+
+.crest {
+  width: 28px;
+  height: 28px;
+  color: var(--gold);
+  flex: none;
+}
+
+/* A coloured pastille identifies a good or a trade. */
+.pastille {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: none;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.3);
+}
+
+/* Avatars are the trade's colour with its initial on it. */
+.avatar {
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 14px;
+  color: rgba(20, 16, 12, 0.78);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+
+.avatar.big {
+  font-size: 22px;
+}
+
+.slot-av {
+  font-size: 12px;
+}
+
+/* ── Resources page ─────────────────────────────────────────────────────── */
+.stock-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: 12px;
+}
+
+.stock-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+}
+
+.stock-row.empty {
+  opacity: 0.42;
+}
+
+.stock-row.pinned {
+  border-color: var(--gold-dim);
+  background: rgba(217, 180, 95, 0.12);
+}
+
+.stock-row:active {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.stock-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stock-amount {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.stock-row .pin {
+  width: 14px;
+  height: 14px;
+  color: var(--gold);
+}
+
+.section-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tab .ic {
+  width: 14px;
+  height: 14px;
+  margin-right: 5px;
+  vertical-align: -0.16em;
+}
+
+.tab .qty {
+  margin-left: 6px;
+  opacity: 0.7;
+}
+
+.kpi .v {
+  /* Long values used to wrap onto three lines and break the grid's rhythm. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }

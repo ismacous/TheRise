@@ -57,6 +57,16 @@ import { FOOD_EXODUS_DAYS, fullName } from '../sim/villagers';
 import type { Building, Villager } from '../sim/types';
 import type { GameApi, SheetId } from './api';
 import { bar, el, onTap } from './dom';
+import { icon, pastille, type IconName } from './icons';
+import {
+  CATEGORY_LABEL as GOOD_CATEGORY_LABEL,
+  CATEGORY_ORDER as GOOD_CATEGORY_ORDER,
+  MAX_PINNED,
+  goodsOfCategory,
+  isPinned,
+  pinnedGoods,
+  togglePin,
+} from './stock';
 import { breakdownBars, chartLegend, lineChart } from './charts';
 import {
   EXPENSE_SOURCES,
@@ -96,6 +106,13 @@ export function sheetTitle(id: SheetId, api: GameApi): { title: string; sub?: st
         sub: `${Math.round(w.treasury)} pièces · ${net >= 0 ? '+' : ''}${net.toFixed(0)} par jour`,
       };
     }
+    case 'stock': {
+      const pct = w.stockCapacity > 0 ? Math.round((w.stockUsed / w.stockCapacity) * 100) : 0;
+      return {
+        title: 'Ressources',
+        sub: `${formatNumber(w.stockUsed)} / ${formatNumber(w.stockCapacity)} · ${pct} % des entrepôts`,
+      };
+    }
     case 'village':
       return { title: TIER_NAMES[w.stats.tier] ?? 'Village', sub: `Rang ${w.stats.tier} / 6` };
     case 'settings':
@@ -130,6 +147,8 @@ export function renderSheet(id: SheetId, api: GameApi, body: HTMLElement, refres
       return renderPeople(api, body, refresh);
     case 'economy':
       return renderEconomy(api, body, refresh);
+    case 'stock':
+      return renderStock(api, body, refresh);
     case 'village':
       return renderVillage(api, body, refresh);
     case 'building':
@@ -165,10 +184,11 @@ function renderBuild(api: GameApi, body: HTMLElement, refresh: Refresh): void {
     if (defs.length === 0) continue;
     const unlockedCount = defs.filter((d) => !d.requires || w.research.completed.has(d.requires)).length;
     const label = CATEGORY_LABELS[cat];
-    const tab = el('button', {
-      class: `tab ${cat === buildCategory ? 'active' : ''}`,
-      text: `${label.icon} ${label.name} ${unlockedCount}/${defs.length}`,
-    });
+    const tab = el('button', { class: `tab ${cat === buildCategory ? 'active' : ''}` }, [
+      icon(label.icon as IconName, 'ic'),
+      el('span', { text: label.name }),
+      el('span', { class: 'qty', text: `${unlockedCount}/${defs.length}` }),
+    ]);
     onTap(tab, () => {
       buildCategory = cat;
       refresh();
@@ -198,7 +218,7 @@ function renderBuild(api: GameApi, body: HTMLElement, refresh: Refresh): void {
     });
     card.append(
       el('div', { class: 'card-title' }, [
-        el('span', { class: 'ic', text: iconFor(def.id) }),
+        buildingIcon(def.id, 'ic'),
         el('span', { text: def.name }),
       ]),
       el('div', { class: 'card-desc', text: def.desc }),
@@ -208,7 +228,7 @@ function renderBuild(api: GameApi, body: HTMLElement, refresh: Refresh): void {
     if (def.goldCost > 0) {
       costs.append(
         el('span', { class: `cost ${w.treasury < def.goldCost ? 'missing' : ''}` }, [
-          el('span', { text: '🪙' }),
+          el('span', { class: 'coin' }),
           el('span', { text: String(def.goldCost) }),
         ]),
       );
@@ -226,13 +246,16 @@ function renderBuild(api: GameApi, body: HTMLElement, refresh: Refresh): void {
       );
     }
     if (def.workers > 0) {
-      costs.append(el('span', { class: 'cost' }, [el('span', { text: `👷 ${def.workers}` })]));
+      costs.append(el('span', { class: 'cost' }, [icon('worker'), el('span', { text: String(def.workers) })]));
     }
     card.append(costs);
 
     if (!unlocked && def.requires) {
       card.append(
-        el('div', { class: 'card-desc', text: `🔒 ${RESEARCH[def.requires].name}` }),
+        el('div', { class: 'card-desc locked-note' }, [
+          icon('lock'),
+          el('span', { text: RESEARCH[def.requires].name }),
+        ]),
       );
     } else {
       onTap(card, () => {
@@ -245,71 +268,100 @@ function renderBuild(api: GameApi, body: HTMLElement, refresh: Refresh): void {
   body.append(grid);
 }
 
-/** A readable glyph per building, reused by every panel. */
-export function iconFor(id: BuildingId): string {
-  const map: Partial<Record<BuildingId, string>> = {
-    town_hall: '🏛️',
-    shack: '🛖',
-    cottage: '🏠',
-    house: '🏡',
-    manor: '🏘️',
-    storehouse: '📦',
-    warehouse: '🏚️',
-    granary: '🌾',
-    woodcutter_camp: '🪓',
-    lumber_camp: '🌲',
-    forester_hut: '🌱',
-    gatherer_hut: '🧺',
-    hunter_camp: '🏹',
-    hunting_lodge: '🦌',
-    fisher_hut: '🎣',
-    fishing_pier: '🛶',
-    fishing_dock: '⛵',
-    fishing_harbour: '⚓',
-    quarry: '🪨',
-    great_quarry: '⛏️',
-    clay_pit: '🏺',
-    coal_mine: '⚫',
-    iron_mine: '⚒️',
-    gold_mine: '✨',
-    deep_mine: '🕳️',
-    wheat_field: '🌾',
-    flax_field: '🌿',
-    chicken_coop: '🐔',
-    sheep_pasture: '🐑',
-    cattle_pasture: '🐄',
-    sawmill: '🪚',
-    water_sawmill: '💧',
-    charcoal_burner: '🔥',
-    brick_kiln: '🧱',
-    smelter: '🌋',
-    blacksmith: '🔨',
-    goldsmith: '💍',
-    butcher: '🔪',
-    smokehouse: '🐠',
-    windmill: '🌬️',
-    bakery: '🍞',
-    brewery: '🍺',
-    weaver: '🧵',
-    tailor: '👕',
-    tannery: '🟤',
-    cobbler: '🥾',
-    carpenter: '🪑',
-    fletcher: '🪶',
-    chandlery: '🕯️',
-    market: '🏪',
-    grand_market: '🏬',
-    trade_post: '⚖️',
-    chapel: '⛪',
-    tavern: '🍻',
-    university: '📚',
-    well: '🪣',
-    firewatch: '🚒',
-    healer_hut: '🌿',
-    dirt_path: '🛤️',
-    cobbled_road: '🧱',
-  };
-  return map[id] ?? '🏠';
+/**
+ * A glyph per building, reused by every panel. Buildings that share a trade
+ * share a mark; the building's own accent colour tells them apart, exactly as
+ * goods are told apart by their pastille.
+ */
+const BUILDING_GLYPH: Partial<Record<BuildingId, IconName>> = {
+  town_hall: 'village',
+  shack: 'home',
+  cottage: 'home',
+  house: 'home',
+  manor: 'home',
+  storehouse: 'box',
+  warehouse: 'box',
+  granary: 'wheat',
+  woodcutter_camp: 'tree',
+  lumber_camp: 'tree',
+  forester_hut: 'tree',
+  gatherer_hut: 'harvest',
+  hunter_camp: 'flag',
+  hunting_lodge: 'flag',
+  fisher_hut: 'water',
+  fishing_pier: 'water',
+  fishing_dock: 'water',
+  fishing_harbour: 'water',
+  quarry: 'stone',
+  great_quarry: 'stone',
+  clay_pit: 'pot',
+  coal_mine: 'stone',
+  iron_mine: 'anvil',
+  gold_mine: 'gem',
+  deep_mine: 'stone',
+  wheat_field: 'wheat',
+  flax_field: 'harvest',
+  chicken_coop: 'food',
+  sheep_pasture: 'food',
+  cattle_pasture: 'food',
+  sawmill: 'tool',
+  water_sawmill: 'tool',
+  charcoal_burner: 'fire',
+  brick_kiln: 'fire',
+  smelter: 'fire',
+  blacksmith: 'anvil',
+  goldsmith: 'gem',
+  butcher: 'food',
+  smokehouse: 'fire',
+  windmill: 'wheat',
+  bakery: 'food',
+  brewery: 'pot',
+  weaver: 'box',
+  tailor: 'box',
+  tannery: 'pot',
+  cobbler: 'box',
+  carpenter: 'tool',
+  fletcher: 'tool',
+  chandlery: 'star',
+  market: 'trade',
+  grand_market: 'trade',
+  trade_post: 'trade',
+  chapel: 'bell',
+  tavern: 'pot',
+  university: 'research',
+  well: 'water',
+  firewatch: 'bell',
+  healer_hut: 'heart',
+  dirt_path: 'cart',
+  cobbled_road: 'cart',
+};
+
+/** Accent colour per category, so two "box" marks never read as one thing. */
+const CATEGORY_COLOR: Record<BuildingCategory, string> = {
+  civic: '#d9b45f',
+  housing: '#c98b46',
+  storage: '#a98a55',
+  gathering: '#7fc06a',
+  farming: '#c8b24a',
+  industry: '#c2724f',
+  crafting: '#a0729c',
+  service: '#6fb0d4',
+  infrastructure: '#8d8069',
+};
+
+export function glyphFor(id: BuildingId): IconName {
+  return BUILDING_GLYPH[id] ?? 'home';
+}
+
+export function colorFor(id: BuildingId): string {
+  return CATEGORY_COLOR[BUILDINGS[id].category] ?? '#d9b45f';
+}
+
+/** The building's mark, tinted by its category. */
+export function buildingIcon(id: BuildingId, cls = ''): SVGSVGElement {
+  const node = icon(glyphFor(id), cls);
+  node.style.color = colorFor(id);
+  return node;
 }
 
 // ── Research ───────────────────────────────────────────────────────────────
@@ -589,7 +641,7 @@ function renderTrade(api: GameApi, body: HTMLElement, refresh: Refresh): void {
       const partner = TRADE_PARTNERS.find((p) => p.id === c.partnerId);
       const row = el('div', { class: 'partner' }, [
         el('div', { class: 'partner-head' }, [
-          el('span', { text: c.direction === 'buy' ? '📥' : '📤' }),
+          icon(c.direction === 'buy' ? 'arrive' : 'leave', 'ic'),
           el('strong', { text: partner?.name ?? c.partnerId }),
           el('span', { class: 'pill', text: c.direction === 'buy' ? 'Achat' : 'Vente' }),
         ]),
@@ -614,7 +666,7 @@ function renderTrade(api: GameApi, body: HTMLElement, refresh: Refresh): void {
       el('div', { class: 'partner-head' }, [
         el('strong', { text: p.name }),
         el('span', { class: 'pill', text: PARTNER_KIND_LABEL[p.kind] }),
-        el('span', { class: 'qty', text: `🤝 ${Math.round(rt.relation)}` }),
+        el('span', { class: 'qty', text: `Relation ${Math.round(rt.relation)}` }),
       ]),
       el('div', { class: 'card-desc', text: p.blurb }),
       el('div', {
@@ -634,7 +686,7 @@ function renderTrade(api: GameApi, body: HTMLElement, refresh: Refresh): void {
         dot,
         el('span', { class: 'grow' }, [
           el('div', { text: GOODS[offer.good].name }),
-          el('div', { class: 'qty', text: `${unit.toFixed(1)} 🪙/u · ${stock} dispo` }),
+          el('div', { class: 'qty', text: `${unit.toFixed(1)} pièces/u · ${stock} dispo` }),
         ]),
       );
       for (const qty of [10, 40]) {
@@ -647,7 +699,7 @@ function renderTrade(api: GameApi, body: HTMLElement, refresh: Refresh): void {
         (btn as HTMLButtonElement).disabled = !hasTradePost(w) || stock <= 0 || w.treasury < unit * Math.min(qty, stock);
         onTap(btn, () => {
           const res = orderBuy(w, p.id, offer.good, qty);
-          if (!res.ok) w.notify(res.reason, '⚠️', 'bad');
+          if (!res.ok) w.notify(res.reason, 'warn', 'bad');
           refresh();
         });
         row.append(btn);
@@ -667,7 +719,10 @@ function renderTrade(api: GameApi, body: HTMLElement, refresh: Refresh): void {
         dot,
         el('span', { class: 'grow' }, [
           el('div', { text: GOODS[offer.good].name }),
-          el('div', { class: 'qty', text: `${unit.toFixed(1)} 🪙/u · en stock ${formatNumber(have)} · demande ${demand}` }),
+          el('div', {
+            class: 'qty',
+            text: `${unit.toFixed(1)} pièces/u · en stock ${formatNumber(have)} · demande ${demand}`,
+          }),
         ]),
       );
       for (const qty of [10, 40]) {
@@ -675,7 +730,7 @@ function renderTrade(api: GameApi, body: HTMLElement, refresh: Refresh): void {
         (btn as HTMLButtonElement).disabled = !hasTradePost(w) || demand <= 0 || have <= 0;
         onTap(btn, () => {
           const res = orderSell(w, p.id, offer.good, qty);
-          if (!res.ok) w.notify(res.reason, '⚠️', 'bad');
+          if (!res.ok) w.notify(res.reason, 'warn', 'bad');
           refresh();
         });
         row.append(btn);
@@ -691,7 +746,7 @@ function renderTrade(api: GameApi, body: HTMLElement, refresh: Refresh): void {
     for (const p of locked) {
       body.append(
         el('div', { class: 'offer-row' }, [
-          el('span', { text: '🔒' }),
+          icon('lock'),
           el('span', { class: 'grow' }, [
             el('div', { text: p.name }),
             el('div', { class: 'qty', text: `${PARTNER_KIND_LABEL[p.kind]} · palier ${p.tier}` }),
@@ -766,10 +821,30 @@ function renderPeople(api: GameApi, body: HTMLElement, refresh: Refresh): void {
   body.append(container);
 }
 
+/**
+ * A villager's avatar: their own initial on their trade's tunic colour — the
+ * same colour they wear on the map. An emoji per trade was unreadable at 28 px
+ * and duplicated across a dozen crafts; a letter on a colour never is, and the
+ * initial tells two neighbours apart where a shared trade glyph could not.
+ */
+function villagerAvatar(v: Villager, cls = ''): HTMLElement {
+  const prof = PROFESSIONS[v.profession] ?? PROFESSIONS.idle;
+  const node = el('div', { class: `avatar ${cls}`.trim(), text: v.name.charAt(0).toUpperCase() });
+  node.style.background = prof.tunic;
+  node.title = prof.name;
+  return node;
+}
+
+/** An icon in a given colour, for lines that need to stay distinguishable. */
+function tintedIcon(name: IconName, color: string): SVGSVGElement {
+  const node = icon(name, 'ic');
+  node.style.color = color;
+  return node;
+}
+
 function villagerRow(api: GameApi, v: Villager): HTMLElement {
   const prof = PROFESSIONS[v.profession] ?? PROFESSIONS.idle;
-  const avatar = el('div', { class: 'avatar', text: prof.icon });
-  avatar.style.background = prof.tunic;
+  const avatar = villagerAvatar(v);
   const bars = el('div', { class: 'mini-bars' }, [
     miniBar(v.satiety / 100, '#e8a94a'),
     miniBar(v.happiness / 100, '#7fc06a'),
@@ -778,7 +853,10 @@ function villagerRow(api: GameApi, v: Villager): HTMLElement {
   const row = el('div', { class: 'villager-row' }, [
     avatar,
     el('div', { class: 'who' }, [
-      el('div', { class: 'nm', text: `${fullName(v)}${v.sick > 0 ? ' 🤒' : ''}` }),
+      el('div', { class: 'nm' }, [
+        el('span', { text: fullName(v) }),
+        v.sick > 0 ? icon('illness', 'sick-mark') : null,
+      ]),
       el('div', {
         class: 'jb',
         text: `${prof.name} · ${Math.floor(v.age)} ans${v.pregnant > 0 ? ' · enceinte' : ''}`,
@@ -800,6 +878,78 @@ function miniBar(value: number, color: string): HTMLElement {
   inner.style.background = color;
   outer.append(inner);
   return outer;
+}
+
+// ── Resources ──────────────────────────────────────────────────────────────
+
+/**
+ * Everything the village owns, on one page. The HUD only carries four pinned
+ * goods now, so this is where the rest lives — grouped, sorted and with the
+ * pin toggle right next to each line.
+ */
+function renderStock(api: GameApi, body: HTMLElement, refresh: Refresh): void {
+  const w = api.world;
+  const pins = pinnedGoods();
+
+  const ratio = w.stockCapacity > 0 ? w.stockUsed / w.stockCapacity : 0;
+  body.append(
+    el('div', { class: 'research-status' }, [
+      statChip('Occupation', `${Math.round(ratio * 100)} %`),
+      statChip('Libre', formatNumber(Math.max(0, w.stockCapacity - w.stockUsed))),
+      statChip('Vivres', `${w.stats.foodDays.toFixed(1)} j`),
+    ]),
+    bar(ratio, ratio > 0.92 ? 'red' : 'green'),
+  );
+  if (ratio > 0.92) {
+    body.append(
+      el('div', {
+        class: 'empty-note',
+        text: "Les entrepôts sont pleins : toute la production en amont s'arrête. Bâtissez un entrepôt, ou vendez au comptoir.",
+      }),
+    );
+  }
+  body.append(
+    el('div', {
+      class: 'card-desc lead',
+      text: `Touchez une ressource pour l'épingler en haut de l'écran (${pins.length}/${MAX_PINNED}).`,
+    }),
+  );
+
+  for (const category of GOOD_CATEGORY_ORDER) {
+    const goods = goodsOfCategory(category)
+      .map((g) => ({ g, amount: w.stockOf(g) }))
+      .sort((a, b) => b.amount - a.amount || GOODS[a.g].name.localeCompare(GOODS[b.g].name));
+    if (goods.length === 0) continue;
+    const total = goods.reduce((n, x) => n + x.amount, 0);
+    body.append(
+      el('div', { class: 'section-title' }, [
+        el('span', { text: GOOD_CATEGORY_LABEL[category] }),
+        el('span', { class: 'qty', text: formatNumber(total) }),
+      ]),
+    );
+    const grid = el('div', { class: 'stock-grid' });
+    for (const { g, amount } of goods) {
+      const def = GOODS[g];
+      const pinned = isPinned(g);
+      const row = el('button', {
+        class: `stock-row ${amount <= 0 ? 'empty' : ''} ${pinned ? 'pinned' : ''}`,
+        title: def.description,
+      });
+      row.append(
+        pastille(def.color),
+        el('span', { class: 'stock-name', text: def.name }),
+        el('span', { class: 'stock-amount', text: formatNumber(amount) }),
+      );
+      if (pinned) row.append(icon('star', 'pin'));
+      onTap(row, () => {
+        togglePin(g);
+        api.requestUiRefresh();
+        refresh();
+      });
+      grid.append(row);
+    }
+    body.append(grid);
+  }
 }
 
 // ── Economy ────────────────────────────────────────────────────────────────
@@ -1032,7 +1182,7 @@ function renderVillage(api: GameApi, body: HTMLElement, refresh: Refresh): void 
 
   body.append(
     el('div', { class: 'tier-banner' }, [
-      el('span', { class: 'crest', text: '🏰' }),
+      icon('village', 'crest'),
       el('div', {}, [
         el('div', { class: 'card-title', text: TIER_NAMES[s.tier] ?? 'Village' }),
         el('div', { class: 'card-desc', text: tierHint(s.tier) }),
@@ -1046,7 +1196,7 @@ function renderVillage(api: GameApi, body: HTMLElement, refresh: Refresh): void 
     ['Bonheur', `${Math.round(s.happiness)}%`, happinessHint(s.happiness)],
     ['Vivres', `${s.foodDays.toFixed(1)} j`, `${formatNumber(s.foodStock)} de nutrition`],
     ['Trésor', formatNumber(w.treasury), `${s.goldPerMinute >= 0 ? '+' : ''}${formatNumber(s.goldPerMinute)}/min`],
-    ['Savoir', `${w.research.completed.size} études`, `${scholarCount(w)} érudit(s) · ×${researchSpeed(w).toFixed(2)}`],
+    ['Savoir', String(w.research.completed.size), `études · ${scholarCount(w)} érudit(s)`],
     ['Bâtiments', String(w.buildingList.filter((b) => b.state === 'active').length), `${w.buildingList.filter((b) => b.state === 'building' || b.state === 'planned').length} en chantier`],
   ];
   for (const [k, v, sub] of rows) {
@@ -1068,11 +1218,11 @@ function renderVillage(api: GameApi, body: HTMLElement, refresh: Refresh): void 
     );
     for (const o of objectives) {
       const [done, target] = o.progress(w);
-      const reward = `🪙 ${o.reward.gold}`;
+      const reward = `${o.reward.gold} pièces`;
       body.append(
         el('div', { class: 'objective-card' }, [
           el('div', { class: 'card-title' }, [
-            el('span', { class: 'ic', text: o.icon }),
+            icon(o.icon as IconName, 'ic'),
             el('span', { text: o.title }),
             el('span', { class: 'qty', style: 'margin-left:auto', text: reward }),
           ]),
@@ -1101,7 +1251,7 @@ function renderVillage(api: GameApi, body: HTMLElement, refresh: Refresh): void 
   } else {
     for (const issue of issues.slice(0, 8)) {
       const row = el('div', { class: 'offer-row' }, [
-        el('span', { text: issue.icon }),
+        icon(issue.icon, 'ic'),
         el('span', { class: 'grow' }, [
           el('div', { text: issue.title }),
           el('div', { class: 'qty', text: issue.detail }),
@@ -1127,7 +1277,7 @@ function renderVillage(api: GameApi, body: HTMLElement, refresh: Refresh): void 
   for (const line of prod) {
     body.append(
       el('div', { class: 'offer-row' }, [
-        el('span', { text: line.icon }),
+        tintedIcon(line.glyph, line.color),
         el('span', { class: 'grow' }, [
           el('div', { text: line.name }),
           el('div', { class: 'qty', text: line.detail }),
@@ -1167,7 +1317,7 @@ function happinessHint(h: number): string {
 }
 
 interface Issue {
-  icon: string;
+  icon: IconName;
   title: string;
   detail: string;
   focus?: [number, number];
@@ -1180,7 +1330,7 @@ function collectIssues(api: GameApi): Issue[] {
 
   if (w.stats.foodDays < 5) {
     issues.push({
-      icon: '🍞',
+      icon: 'food',
       title: 'Les réserves de nourriture baissent',
       detail: `${w.stats.foodDays.toFixed(1)} jours restants`,
       weight: 100,
@@ -1188,7 +1338,7 @@ function collectIssues(api: GameApi): Issue[] {
   }
   if (w.stats.housingCapacity <= w.stats.population) {
     issues.push({
-      icon: '🏠',
+      icon: 'home',
       title: 'Plus aucun logement libre',
       detail: 'Sans lit, pas de naissance ni de nouvel arrivant',
       weight: 80,
@@ -1196,7 +1346,7 @@ function collectIssues(api: GameApi): Issue[] {
   }
   if (w.stats.idle > 4) {
     issues.push({
-      icon: '🚶',
+      icon: 'worker',
       title: `${w.stats.idle} villageois sans emploi`,
       detail: 'Construisez des ateliers ou des camps de récolte',
       weight: 40,
@@ -1204,7 +1354,7 @@ function collectIssues(api: GameApi): Issue[] {
   }
   if (w.stockUsed >= w.stockCapacity * 0.95 && w.stockCapacity > 0) {
     issues.push({
-      icon: '📦',
+      icon: 'box',
       title: 'Entrepôts saturés',
       detail: 'La production est bloquée tant que rien ne sort',
       weight: 70,
@@ -1214,7 +1364,7 @@ function collectIssues(api: GameApi): Issue[] {
   for (const b of w.buildingList) {
     if (b.state === 'burning') {
       issues.push({
-        icon: '🔥',
+        icon: 'fire',
         title: `${BUILDINGS[b.def].name} en feu`,
         detail: `${Math.round(b.fire * 100)} % consumé`,
         focus: [b.cx, b.cy],
@@ -1222,7 +1372,7 @@ function collectIssues(api: GameApi): Issue[] {
       });
     } else if (b.state === 'active' && b.stall) {
       issues.push({
-        icon: '⚠️',
+        icon: 'warn',
         title: `${BUILDINGS[b.def].name} à l'arrêt`,
         detail: b.stall,
         focus: [b.cx, b.cy],
@@ -1230,7 +1380,7 @@ function collectIssues(api: GameApi): Issue[] {
       });
     } else if (b.state === 'active' && BUILDINGS[b.def].workers > 0 && b.workers.length === 0) {
       issues.push({
-        icon: '👷',
+        icon: 'worker',
         title: `${BUILDINGS[b.def].name} sans ouvrier`,
         detail: 'Aucun villageois disponible',
         focus: [b.cx, b.cy],
@@ -1244,7 +1394,8 @@ function collectIssues(api: GameApi): Issue[] {
 }
 
 interface ProdLine {
-  icon: string;
+  glyph: IconName;
+  color: string;
   name: string;
   detail: string;
   efficiency: number;
@@ -1267,7 +1418,8 @@ function productionSummary(api: GameApi): ProdLine[] {
   const out: ProdLine[] = [];
   for (const [id, e] of byDef) {
     out.push({
-      icon: iconFor(id),
+      glyph: glyphFor(id),
+      color: colorFor(id),
       name: `${BUILDINGS[id].name} ×${e.count}`,
       detail: `${e.workers}/${e.cap} ouvriers`,
       efficiency: e.eff / Math.max(1, e.count),
@@ -1396,12 +1548,11 @@ function renderBuilding(api: GameApi, body: HTMLElement, refresh: Refresh): void
       const id = b.workers[i];
       const v = id !== undefined ? w.villagerById.get(id) : undefined;
       if (v) {
-        const prof = PROFESSIONS[v.profession] ?? PROFESSIONS.idle;
+        const av = villagerAvatar(v, 'slot-av');
         const slot = el('button', { class: 'slot filled', title: 'Retirer de ce poste' }, [
-          el('span', { class: 'slot-av', text: prof.icon }),
+          av,
           el('span', { class: 'slot-name', text: v.name }),
         ]);
-        (slot.querySelector('.slot-av') as HTMLElement).style.background = prof.tunic;
         onTap(slot, () => {
           w.unassignWorker(b.id, v.id);
           refresh();
@@ -1615,8 +1766,7 @@ function renderVillager(api: GameApi, body: HTMLElement, refresh: Refresh): void
   }
   const prof = PROFESSIONS[v.profession] ?? PROFESSIONS.idle;
 
-  const avatar = el('div', { class: 'avatar big', text: prof.icon });
-  avatar.style.background = prof.tunic;
+  const avatar = villagerAvatar(v, 'big');
   body.append(
     el('div', { class: 'detail-head' }, [
       avatar,
@@ -1656,10 +1806,17 @@ function renderVillager(api: GameApi, body: HTMLElement, refresh: Refresh): void
       ]),
     );
   }
-  if (v.sick > 0) body.append(el('div', { class: 'empty-note', text: '🤒 Alité, convalescence en cours.' }));
+  if (v.sick > 0) {
+    body.append(
+      el('div', { class: 'empty-note' }, [icon('illness'), el('span', { text: 'Alité, convalescence en cours.' })]),
+    );
+  }
   if (v.pregnant > 0) {
     body.append(
-      el('div', { class: 'empty-note', text: `🤰 Enceinte — naissance dans ${v.pregnant.toFixed(1)} jours.` }),
+      el('div', { class: 'empty-note' }, [
+        icon('family'),
+        el('span', { text: `Enceinte — naissance dans ${v.pregnant.toFixed(1)} jours.` }),
+      ]),
     );
   }
 
@@ -1671,7 +1828,7 @@ function renderVillager(api: GameApi, body: HTMLElement, refresh: Refresh): void
     ['Foyer', home],
   ] as Array<[string, Building | null | undefined]>) {
     const row = el('div', { class: 'offer-row' }, [
-      el('span', { text: b ? iconFor(b.def) : '—' }),
+      b ? buildingIcon(b.def, 'ic') : el('span', { text: '—' }),
       el('span', { class: 'grow' }, [
         el('div', { text: label }),
         el('div', { class: 'qty', text: b ? BUILDINGS[b.def].name : 'Aucun' }),
@@ -1688,7 +1845,7 @@ function renderVillager(api: GameApi, body: HTMLElement, refresh: Refresh): void
     body.append(row);
   }
 
-  const follow = el('button', { class: 'btn primary', text: '🎯 Centrer la caméra' });
+  const follow = el('button', { class: 'btn primary', text: 'Centrer la caméra' });
   onTap(follow, () => api.focusOn(v.x, v.y, 14));
   const close = el('button', { class: 'btn', text: 'Désélectionner' });
   onTap(close, () => {
@@ -1727,7 +1884,7 @@ function renderSettings(api: GameApi, body: HTMLElement, refresh: Refresh): void
   body.append(el('div', { class: 'section-title', text: 'Affichage' }));
   const debugBtn = el('button', {
     class: 'btn',
-    text: api.showDebug ? '🐞 Masquer les infos techniques' : '🐞 Afficher les infos techniques',
+    text: api.showDebug ? 'Masquer les infos techniques' : 'Afficher les infos techniques',
   });
   onTap(debugBtn, () => {
     api.showDebug = !api.showDebug;
@@ -1736,17 +1893,17 @@ function renderSettings(api: GameApi, body: HTMLElement, refresh: Refresh): void
   body.append(el('div', { class: 'btn-row' }, [debugBtn]));
 
   body.append(el('div', { class: 'section-title', text: 'Partie' }));
-  const saveBtn = el('button', { class: 'btn primary', text: '💾 Sauvegarder' });
+  const saveBtn = el('button', { class: 'btn primary', text: 'Sauvegarder' });
   onTap(saveBtn, () => {
     void api.save();
   });
-  const loadBtn = el('button', { class: 'btn', text: '📂 Charger' });
+  const loadBtn = el('button', { class: 'btn', text: 'Charger' });
   onTap(loadBtn, () => {
     void api.load();
   });
   body.append(el('div', { class: 'btn-row' }, [saveBtn, loadBtn]));
 
-  const restart = el('button', { class: 'btn danger', text: '🌱 Nouvelle vallée' });
+  const restart = el('button', { class: 'btn danger', text: 'Nouvelle vallée' });
   onTap(restart, () => {
     if (confirm('Abandonner ce village et générer une nouvelle vallée ?')) {
       api.restart();
