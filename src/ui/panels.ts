@@ -4,6 +4,7 @@ import {
   BUILDINGS_BY_CATEGORY,
   CATEGORY_LABELS,
   type BuildingCategory,
+  type BuildingDef,
   type BuildingId,
 } from '../data/buildings';
 import { GOODS, type GoodId } from '../data/goods';
@@ -16,6 +17,7 @@ import {
   TIER_NAMES as ERA_NAMES,
   type ResearchBranch,
   type ResearchDef,
+  type ResearchId,
 } from '../data/research';
 import { PARTNER_KIND_LABEL, TRADE_PARTNERS } from '../data/trade';
 import {
@@ -182,98 +184,159 @@ const CATEGORY_ORDER: BuildingCategory[] = [
   'infrastructure',
 ];
 
-let buildCategory: BuildingCategory = 'gathering';
+/** `null` is "everything", which is what the panel opens on. */
+let buildCategory: BuildingCategory | null = null;
 
+/**
+ * The build panel.
+ *
+ * It used to be a row of category tabs above a grid, and it was the worst
+ * screen in the game: the tabs scrolled sideways, so half the categories were
+ * off the right edge, and the grid was mostly buildings the player could not
+ * place — every locked entry in the catalogue sat there greyed out, in the way
+ * of the four or five they could actually build.
+ *
+ * So: locked buildings are gone entirely, the filter chips wrap instead of
+ * scrolling — nothing is ever off-screen — and the default is one list of
+ * everything available, grouped under its headings. In the opening hour that
+ * list is six cards long, which is the whole point.
+ */
 function renderBuild(api: GameApi, body: HTMLElement, refresh: Refresh): void {
   const w = api.world;
-  const tabs = el('div', { class: 'tabs' });
+
+  const available: BuildingDef[] = [];
+  let lockedCount = 0;
+  let nextUp: ResearchId | null = null;
   for (const cat of CATEGORY_ORDER) {
-    const defs = (BUILDINGS_BY_CATEGORY.get(cat) ?? []).filter((d) => d.id !== 'town_hall');
-    if (defs.length === 0) continue;
-    const unlockedCount = defs.filter((d) => !d.requires || w.research.completed.has(d.requires)).length;
-    const label = CATEGORY_LABELS[cat];
-    const tab = el('button', { class: `tab ${cat === buildCategory ? 'active' : ''}` }, [
-      icon(label.icon as IconName, 'ic'),
-      el('span', { text: label.name }),
-      el('span', { class: 'qty', text: `${unlockedCount}/${defs.length}` }),
-    ]);
-    onTap(tab, () => {
-      buildCategory = cat;
-      refresh();
-    });
-    tabs.append(tab);
+    for (const def of BUILDINGS_BY_CATEGORY.get(cat) ?? []) {
+      if (def.id === 'town_hall') continue;
+      if (def.requires && !w.research.completed.has(def.requires)) {
+        lockedCount++;
+        // The nearest thing to a "coming next": the cheapest study that would
+        // put something new in this list.
+        if (
+          canQueueResearch(w, def.requires) &&
+          (!nextUp || RESEARCH[def.requires].cost < RESEARCH[nextUp].cost)
+        ) {
+          nextUp = def.requires;
+        }
+        continue;
+      }
+      available.push(def);
+    }
   }
-  body.append(tabs);
 
-  const grid = el('div', { class: 'card-grid' });
-  const defs = (BUILDINGS_BY_CATEGORY.get(buildCategory) ?? []).filter((d) => d.id !== 'town_hall');
-  // Unlocked first, then the locked ones as a visible goal.
-  defs.sort((a, b) => {
-    const au = !a.requires || w.research.completed.has(a.requires) ? 0 : 1;
-    const bu = !b.requires || w.research.completed.has(b.requires) ? 0 : 1;
-    return au - bu || a.tier - b.tier;
-  });
-
-  for (const def of defs) {
-    const unlocked = !def.requires || w.research.completed.has(def.requires);
-    const affordable =
-      unlocked &&
-      w.treasury >= def.goldCost &&
-      Object.entries(def.cost).every(([g, n]) => w.stockOf(g as GoodId) >= (n as number));
-
-    const card = el('div', {
-      class: `card ${unlocked ? '' : 'locked'} ${affordable ? 'affordable' : ''}`,
-    });
-    card.append(
-      el('div', { class: 'card-title' }, [
-        buildingIcon(def.id, 'ic'),
-        el('span', { text: def.name }),
-      ]),
-      el('div', { class: 'card-desc', text: def.desc }),
+  if (available.length === 0) {
+    body.append(
+      el('div', { class: 'empty-note', text: "Rien à bâtir pour l'instant. Passez par la page Savoir." }),
     );
-
-    const costs = el('div', { class: 'cost-row' });
-    if (def.goldCost > 0) {
-      costs.append(
-        el('span', { class: `cost ${w.treasury < def.goldCost ? 'missing' : ''}` }, [
-          el('span', { class: 'coin' }),
-          el('span', { text: String(def.goldCost) }),
-        ]),
-      );
-    }
-    for (const [g, n] of Object.entries(def.cost)) {
-      const good = g as GoodId;
-      const missing = w.stockOf(good) < (n as number);
-      const dot = el('span', { class: 'dot' });
-      dot.style.background = GOODS[good].color;
-      costs.append(
-        el('span', { class: `cost ${missing ? 'missing' : ''}`, title: GOODS[good].name }, [
-          dot,
-          el('span', { text: `${GOODS[good].short} ${n}` }),
-        ]),
-      );
-    }
-    if (def.workers > 0) {
-      costs.append(el('span', { class: 'cost' }, [icon('worker'), el('span', { text: String(def.workers) })]));
-    }
-    card.append(costs);
-
-    if (!unlocked && def.requires) {
-      card.append(
-        el('div', { class: 'card-desc locked-note' }, [
-          icon('lock'),
-          el('span', { text: RESEARCH[def.requires].name }),
-        ]),
-      );
-    } else {
-      onTap(card, () => {
-        api.beginPlacement(def.id);
-        api.closeSheet();
-      });
-    }
-    grid.append(card);
+    return;
   }
-  body.append(grid);
+
+  // Which categories actually have something in them right now. A chip for an
+  // empty category is a dead end the player has to discover by tapping it.
+  const present = CATEGORY_ORDER.filter((c) => available.some((d) => d.category === c));
+  if (buildCategory !== null && !present.includes(buildCategory)) buildCategory = null;
+
+  if (present.length > 1) {
+    const chips = el('div', { class: 'chip-filter' });
+    const chip = (label: string, count: number, cat: BuildingCategory | null): HTMLElement => {
+      const node = el('button', { class: `chip ${cat === buildCategory ? 'active' : ''}` }, [
+        el('span', { text: label }),
+        el('span', { class: 'qty', text: String(count) }),
+      ]);
+      onTap(node, () => {
+        buildCategory = cat;
+        refresh();
+      });
+      return node;
+    };
+    chips.append(chip('Tout', available.length, null));
+    for (const cat of present) {
+      chips.append(
+        chip(CATEGORY_LABELS[cat].name, available.filter((d) => d.category === cat).length, cat),
+      );
+    }
+    body.append(chips);
+  }
+
+  const shown = buildCategory === null ? present : [buildCategory];
+  for (const cat of shown) {
+    const defs = available.filter((d) => d.category === cat).sort((a, b) => a.tier - b.tier);
+    if (defs.length === 0) continue;
+    if (shown.length > 1) {
+      body.append(
+        el('div', { class: 'section-title' }, [
+          icon(CATEGORY_LABELS[cat].icon as IconName, 'ic'),
+          el('span', { text: CATEGORY_LABELS[cat].name }),
+        ]),
+      );
+    }
+    const grid = el('div', { class: 'card-grid' });
+    for (const def of defs) grid.append(buildCard(api, def));
+    body.append(grid);
+  }
+
+  // The catalogue is much bigger than this list, and hiding that entirely
+  // would make the game look small. One line at the bottom, not forty cards.
+  if (lockedCount > 0) {
+    const note = el('div', { class: 'build-locked-note' }, [
+      icon('lock'),
+      el('span', {
+        text: nextUp
+          ? `${lockedCount} autres bâtiments attendent une étude — au plus près : ${RESEARCH[nextUp].name}.`
+          : `${lockedCount} autres bâtiments attendent une étude.`,
+      }),
+    ]);
+    onTap(note, () => api.openSheet('research'));
+    body.append(note);
+  }
+}
+
+/** One placeable building, as a card. */
+function buildCard(api: GameApi, def: BuildingDef): HTMLElement {
+  const w = api.world;
+  const affordable =
+    w.treasury >= def.goldCost &&
+    Object.entries(def.cost).every(([g, n]) => w.stockOf(g as GoodId) >= (n as number));
+
+  const card = el('div', { class: `card ${affordable ? 'affordable' : ''}` });
+  card.append(
+    el('div', { class: 'card-title' }, [buildingIcon(def.id, 'ic'), el('span', { text: def.name })]),
+    el('div', { class: 'card-desc', text: def.desc }),
+  );
+
+  const costs = el('div', { class: 'cost-row' });
+  if (def.goldCost > 0) {
+    costs.append(
+      el('span', { class: `cost ${w.treasury < def.goldCost ? 'missing' : ''}` }, [
+        el('span', { class: 'coin' }),
+        el('span', { text: String(def.goldCost) }),
+      ]),
+    );
+  }
+  for (const [g, n] of Object.entries(def.cost)) {
+    const good = g as GoodId;
+    const missing = w.stockOf(good) < (n as number);
+    const dot = el('span', { class: 'dot' });
+    dot.style.background = GOODS[good].color;
+    costs.append(
+      el('span', { class: `cost ${missing ? 'missing' : ''}`, title: GOODS[good].name }, [
+        dot,
+        el('span', { text: `${GOODS[good].short} ${n}` }),
+      ]),
+    );
+  }
+  if (def.workers > 0) {
+    costs.append(el('span', { class: 'cost' }, [icon('worker'), el('span', { text: String(def.workers) })]));
+  }
+  card.append(costs);
+
+  onTap(card, () => {
+    api.beginPlacement(def.id);
+    api.closeSheet();
+  });
+  return card;
 }
 
 /**

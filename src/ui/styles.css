@@ -535,10 +535,78 @@ body {
   font-weight: 600;
 }
 
-/* ── Cards ──────────────────────────────────────────────────────────────── */
+/*
+ * A filter row that wraps.
+ *
+ * The build panel used `.tabs`, which scrolls sideways: on a phone that put
+ * four of the nine categories past the right edge, and nothing on screen said
+ * they were there. These wrap onto as many lines as they need, so the whole
+ * choice is visible at a glance and never moves under the thumb.
+ */
+.chip-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.chip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 14px;
+  border: 1px solid var(--panel-line);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--ink-dim);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.chip .qty {
+  font-size: 10.5px;
+  opacity: 0.7;
+}
+
+.chip.active {
+  background: var(--gold);
+  border-color: var(--gold);
+  color: #1c1814;
+  font-weight: 600;
+}
+
+.chip.active .qty {
+  opacity: 0.8;
+}
+
+/* The one line that says the catalogue is bigger than what is on screen. */
+.build-locked-note {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 14px 0 4px;
+  padding: 9px 11px;
+  border: 1px dashed var(--panel-line);
+  border-radius: var(--radius);
+  color: var(--ink-faint);
+  font-size: 11.5px;
+  line-height: 1.32;
+  cursor: pointer;
+}
+
+.build-locked-note .ic {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+}
+
+/* ── Cards ── ────────────────────────────────────────────────────────────── */
 .card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  /* `auto-fit`, not `auto-fill`: a heading with a single building under it
+     should take the whole width rather than leave a hole beside it. */
+  grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
   gap: 8px;
 }
 
@@ -2002,6 +2070,18 @@ body {
   align-items: baseline;
   justify-content: space-between;
   gap: 8px;
+}
+
+.section-title .ic {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+  align-self: center;
+}
+
+/* A heading that is only an icon and a name closes up on the left. */
+.section-title .ic + span {
+  margin-right: auto;
 }
 
 .tab .ic {
