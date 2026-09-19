@@ -272,16 +272,45 @@ ne fait rien pendant vingt minutes ne perd personne.
 
 ## 5. Logistique
 
-Un **tableau de tâches** est reconstruit chaque seconde et couvre cinq besoins :
+**Qui va chercher quoi, et où.** Tout passait autrefois par un seul tableau de
+tâches : un atelier à court de rondins y déposait une demande, un chantier
+aussi, et le porteur le plus proche prenait celle qui marquait le meilleur
+score. Ça paraissait raisonnable et ça se comportait mal — une cabane est
+restée à deux rondins sur douze toute une soirée pendant que chaque rondin du
+village partait à la scierie, parce que la scierie était plus près de
+l'entrepôt et que la priorité n'achète au chantier que trente cases d'avance.
 
-1. livrer les matériaux aux chantiers (priorité la plus haute) ;
-2. sortir les produits finis des ateliers vers les entrepôts ;
-3. approvisionner les ateliers en intrants ;
-4. garnir les marchés en vivres et biens de confort ;
-5. fournir les chandelles aux chapelles et aux érudits.
+Trois métiers déplacent des biens, et chacun a sa règle :
 
-Les tâches déjà prises par un porteur sont conservées d'un cycle à l'autre :
-personne n'est jamais détourné d'une livraison en cours.
+1. **Les porteurs d'entrepôt** font leur tournée et ramènent les produits
+   finis des ateliers de leur rayon. C'est la seule chose qui reste sur le
+   tableau, parce que c'en est vraiment une : un porteur, beaucoup d'ateliers.
+2. **Les ouvriers vont chercher leurs propres intrants**, à l'entrepôt le plus
+   proche qui en a, ou directement à la source si elle est plus près.
+3. **Les bâtisseurs ne se servent qu'en dépôt.** Jamais dans un atelier. C'est
+   ce qui fait de l'emplacement d'un entrepôt une décision : un grand village
+   veut des dépôts près de ses chantiers.
+
+Plus rien n'est en concurrence, donc plus rien ne peut être discrètement
+supplanté. Le tableau qui subsiste couvre les tournées de dépôt, la sortie des
+produits finis, le garnissage des marchés et les chandelles des érudits ; les
+tâches déjà prises y sont conservées d'un cycle à l'autre, personne n'est
+jamais détourné d'une livraison en cours.
+
+La recherche de source tourne **une fois par seconde pour tout le village**,
+pas une fois par ouvrier : un atelier à sec lâche la tâche de son ouvrier
+toutes les demi-secondes, et leur faire parcourir trois cents bâtiments chacun
+était la seule partie de cette refonte qui coûtait du temps mesurable.
+
+### Le tri
+
+Chaque dépôt peut se voir dire ce qu'il garde — tout par défaut, et le joueur
+décoche. C'est ce qui permet de faire des quartiers : du minerai près des
+forges, du grain près du fournil, et des bâtisseurs qui ne traversent pas la
+vallée pour une planche. « Tout coché » est enregistré comme *rien* plutôt que
+comme la liste du jour, pour qu'un entrepôt bâti ce matin accepte encore le
+bien dont l'étude tombera ce soir. Un dépôt qu'on restreint renvoie ce qu'il
+ne trie plus, sans quoi le réglage serait un piège.
 
 ### Les dépôts font leur tournée
 

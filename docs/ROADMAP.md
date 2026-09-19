@@ -25,38 +25,40 @@ date ; c'est l'ordre dans lequel les ajouts auraient le plus de valeur.
   affamé ou malheureux — les gens seulement de près
 - Cadence réelle mesurée par bâtiment, en unités par minute
 - Ruines réparables ; démolition qui demande des bras et du temps
+- Ravitaillement par métier : les ouvriers cherchent leurs intrants, les
+  bâtisseurs ne se servent qu'en dépôt, les porteurs font leur tournée
+- Tri par entrepôt, pour faire des quartiers
+- Carte plein écran derrière un bouton
 - Sauvegarde automatique, trois niveaux de qualité, APK produit par CI
 
 ## Ensuite — confort de jeu
 
-1. **Mini-carte.** Sur une carte de cette taille, se repérer au doigt finit par
-   fatiguer. Une mini-carte avec le champ de vision et les alertes.
-2. **Files de construction.** Poser cinq chaumières d'affilée sans rouvrir le
+1. **Files de construction.** Poser cinq chaumières d'affilée sans rouvrir le
    menu à chaque fois.
-3. **Priorités manuelles.** Pouvoir épingler un bâtiment comme prioritaire à
+2. **Priorités manuelles.** Pouvoir épingler un bâtiment comme prioritaire à
    l'embauche, ou lui fixer un nombre d'ouvriers.
-4. **Sauvegardes multiples** et export/import du fichier.
+3. **Sauvegardes multiples** et export/import du fichier.
 
 ## Ensuite — contenu
 
-5. **Chevaux.** Écurie qui accélère les porteurs dans un rayon, et attelages
+4. **Chevaux.** Écurie qui accélère les porteurs dans un rayon, et attelages
    qui doublent la charge. Demandé explicitement, et cohérent avec le ton.
-6. **Verger et rucher.** Fruits, miel, hydromel : une seconde filière de
+5. **Verger et rucher.** Fruits, miel, hydromel : une seconde filière de
    confort qui ne dépend pas des troupeaux.
-7. **Pont et gué.** Franchir les rivières change complètement la lecture de la
+6. **Pont et gué.** Franchir les rivières change complètement la lecture de la
    carte et la logistique.
-8. **Météo saisonnière plus marquée.** Gel qui arrête les champs, crues qui
+7. **Météo saisonnière plus marquée.** Gel qui arrête les champs, crues qui
     coupent les routes.
 
 ## Ensuite — profondeur
 
-9. **Spécialisation des villageois.** Un bûcheron qui coupe depuis dix jours
+8. **Spécialisation des villageois.** Un bûcheron qui coupe depuis dix jours
     travaille plus vite. Donne du poids au fait de ne pas tout réorganiser.
-10. **Classes sociales.** Les demeures veulent du mobilier et des chandelles,
+9. **Classes sociales.** Les demeures veulent du mobilier et des chandelles,
     sous peine de retour à l'état de maison — le cœur de *Foundation*.
-11. **Contrats commerciaux.** Livrer 200 planches en dix jours contre une forte
+10. **Contrats commerciaux.** Livrer 200 planches en dix jours contre une forte
     somme. Un objectif chiffré qui structure une partie entière.
-12. **Fêtes de village.** Dépenser de la bière et de la nourriture pour un pic
+11. **Fêtes de village.** Dépenser de la bière et de la nourriture pour un pic
     de bonheur, une fois par saison.
 
 ## Volontairement écarté
