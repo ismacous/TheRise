@@ -51,6 +51,9 @@ export function generateWorld(opts: Partial<WorldGenOptions> = {}): GeneratedWor
   const detail = new ValueNoise2D(rng);
   const moistNoise = new ValueNoise2D(rng);
   const oreNoise = new ValueNoise2D(rng);
+  // A second field, at a coarser scale and unrelated to elevation: this is
+  // what puts a seam of coal in a valley rather than only on the skyline.
+  const seamNoise = new ValueNoise2D(rng);
 
   const W = o.width;
   const H = o.height;
@@ -180,14 +183,31 @@ export function generateWorld(opts: Partial<WorldGenOptions> = {}): GeneratedWor
         continue;
       }
 
-      // Stone outcrops.
+      // ── Stone ──────────────────────────────────────────────────────────
+      // Ordinary stone belongs everywhere. Sending the player to the far
+      // corner of the map for the first wall they ever build was the single
+      // worst thing about the old distribution: a quarry is an early
+      // building, and it had nowhere to stand.
+      //
+      // Scattered, then, at roughly a third of the density of berry bushes,
+      // with the seam field thickening it here and there so a valley has its
+      // own stony patch to quarry rather than an even sprinkle of pebbles.
+      const seam = seamNoise.fbm(x * 0.028 + 41, y * 0.028 + 61, 3);
       if (t === TERRAIN.ROCK && rng.chance(0.10)) {
         add('stone_rock', x, y, rng.int(260, 480), rng.int(0, 2));
         map.blocker[i] = nodes[nodes.length - 1].id;
         continue;
       }
-      if (t === TERRAIN.GRASS && rng.chance(0.0025)) {
-        add('stone_rock', x, y, rng.int(160, 280), rng.int(0, 2));
+      //
+      // The densities are deliberately small. Every outcrop is a blocker, and
+      // the first try — a third of a berry bush's density *everywhere* —
+      // littered the valley with so many that villagers could no longer get
+      // round their own village and the test town starved inside an hour.
+      if (
+        (t === TERRAIN.GRASS || t === TERRAIN.FOREST || t === TERRAIN.SAND) &&
+        rng.chance(seam > 0.66 ? 0.008 : 0.0015)
+      ) {
+        add('stone_rock', x, y, rng.int(140, 300), rng.int(0, 2));
         map.blocker[i] = nodes[nodes.length - 1].id;
         continue;
       }
@@ -198,11 +218,19 @@ export function generateWorld(opts: Partial<WorldGenOptions> = {}): GeneratedWor
         continue;
       }
 
-      // Ore veins, gated by noise so they come in believable clusters.
-      // Ore hugs the highlands. Gating on the map's own rock threshold keeps
-      // every seed supplied instead of leaving flat valleys without a mine.
+      // ── Ore ────────────────────────────────────────────────────────────
+      // Two fields rather than one. `ore` follows the highlands, which is
+      // where a mountain's worth of ore belongs; `seam` does not, and it is
+      // what breaks the old arrangement where every metal in the valley sat
+      // in one rocky corner and nowhere else. Coal and iron are the metals of
+      // the middle game, so they get lowland seams — a handful of pockets,
+      // several per map, each worth walking to.
+      //
+      // Gold keeps its mountain. The player said as much: a rare ore may be
+      // far away, it is the ordinary ones that must not be.
       const ore = oreNoise.fbm(x * 0.045 + 17, y * 0.045 + 23, 3);
-      if (t === TERRAIN.ROCK || e > rockThreshold - 1.4) {
+      const highland = t === TERRAIN.ROCK || e > rockThreshold - 1.4;
+      if (highland) {
         if (ore > 0.60 && rng.chance(0.10)) {
           add('coal_vein', x, y, rng.int(400, 700), 0);
           continue;
@@ -211,8 +239,19 @@ export function generateWorld(opts: Partial<WorldGenOptions> = {}): GeneratedWor
           add('iron_vein', x, y, rng.int(300, 520), 0);
           continue;
         }
-        if (ore > 0.72 && e > rockThreshold && rng.chance(0.05)) {
+        if (ore > 0.68 && e > rockThreshold && rng.chance(0.07)) {
           add('gold_vein', x, y, rng.int(120, 230), 0);
+          continue;
+        }
+      } else if (t !== TERRAIN.SAND) {
+        // Lowland seams are tighter and poorer than a mountain face: finding
+        // one is a good day, not the end of the ore question.
+        if (seam > 0.72 && rng.chance(0.035)) {
+          add('coal_vein', x, y, rng.int(220, 400), 0);
+          continue;
+        }
+        if (seam > 0.78 && ore > 0.5 && rng.chance(0.03)) {
+          add('iron_vein', x, y, rng.int(180, 320), 0);
           continue;
         }
       }

@@ -37,4 +37,41 @@ describe('worldgen shape', () => {
       expect(shore, `${seed} has no water near the start`).toBe(true);
     }
   }, 60000);
+
+  /**
+   * Every ore on the map used to live in a single rocky biome, and that biome
+   * was usually a corner: the first wall a player ever built meant a trek
+   * across the valley. Stone belongs everywhere, concentrations are welcome,
+   * and only gold may be genuinely far away.
+   */
+  it('scatters ordinary stone across the map instead of piling it in a corner', () => {
+    for (const seed of ['a', 'b', 'c', 'the-rise', 'vallee-1', 'vallee-2']) {
+      const { map, nodes, startX, startY } = generateWorld({ seed });
+      const stone = nodes.filter((n) => n.kind === 'stone_rock');
+
+      // Some within a short walk of the founding village.
+      const near = stone.filter((n) => Math.hypot(n.x - startX, n.y - startY) < 45).length;
+      expect(near, `${seed}: aucune pierre près du village`).toBeGreaterThan(3);
+
+      // And present in most of the map, not bunched into one region. Quarters
+      // rather than halves, because a lake can legitimately empty one.
+      const quarters = [0, 0, 0, 0];
+      for (const n of stone) {
+        quarters[(n.x < map.width / 2 ? 0 : 1) + (n.y < map.height / 2 ? 0 : 2)]++;
+      }
+      const lived = quarters.filter((q) => q > 2).length;
+      expect(lived, `${seed}: pierre dans ${lived} quart(s) seulement`).toBeGreaterThanOrEqual(3);
+
+      // Coal and iron keep concentrations, but not a single one.
+      const ore = nodes.filter((n) => n.kind === 'coal_vein' || n.kind === 'iron_vein');
+      const oreQuarters = [0, 0, 0, 0];
+      for (const n of ore) {
+        oreQuarters[(n.x < map.width / 2 ? 0 : 1) + (n.y < map.height / 2 ? 0 : 2)]++;
+      }
+      expect(
+        oreQuarters.filter((q) => q > 0).length,
+        `${seed}: minerai dans un seul quart de carte`,
+      ).toBeGreaterThanOrEqual(2);
+    }
+  }, 60000);
 });

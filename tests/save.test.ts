@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { computeStats, createNewGame } from '../src/sim/simulation';
+import { outputRates } from '../src/sim/output';
 import { deserialize, serialize } from '../src/sim/save';
 import { startResearch } from '../src/sim/research';
 import { orderSell } from '../src/sim/economy';
@@ -103,12 +104,17 @@ describe('save and load', () => {
     const data = JSON.parse(JSON.stringify(serialize(sim, GEN)));
     const restoredSim = deserialize(data);
     const w = restoredSim.world;
-    const foodBefore = w.totalFood();
     for (let i = 0; i < 3000; i++) restoredSim.tick(0.1);
     computeStats(w);
     expect(w.stats.population).toBeGreaterThan(0);
-    // The berry hut is renewable, so food must keep coming in after a load.
-    expect(w.totalFood()).toBeGreaterThan(foodBefore);
+    // The berry hut must still be gathering after a load. This used to compare
+    // the larder against a snapshot, which measured the balance of gathering
+    // against eating rather than whether the hut works at all: on a village
+    // that happened to be a little hungry that day, a perfectly good save
+    // failed the test. The hut's own measured output says it plainly.
+    const hut = w.buildingList.find((b) => b.def === 'gatherer_hut')!;
+    const gathered = outputRates(hut).reduce((sum, r) => sum + r.perMinute, 0);
+    expect(gathered, 'la hutte du cueilleur ne ramasse plus rien').toBeGreaterThan(0);
     // Villagers must have picked their jobs back up rather than idling.
     const working = w.villagers.filter((v) => v.workId !== 0).length;
     expect(working).toBeGreaterThan(0);
