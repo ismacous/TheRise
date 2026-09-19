@@ -32,7 +32,14 @@ export type PlacementRule =
   /** Footprint must cover at least one node of the given kind. */
   | { kind: 'deposit'; node: NodeKind }
   /** Free-form tile painting (roads, fields). */
-  | { kind: 'paint' };
+  | { kind: 'paint' }
+  /**
+   * Must sit inside the working ground of a building that is already there:
+   * the forester's hut inside a woodcutters' circle, the mill inside a wheat
+   * field's square. A host that gathers uses its gathering circle; any other
+   * host uses its footprint grown by `margin` tiles.
+   */
+  | { kind: 'within'; hosts: BuildingId[]; margin?: number };
 
 export interface Recipe {
   inputs: Partial<Record<GoodId, number>>;
@@ -382,11 +389,11 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     buildWork: 50,
     workers: 2,
     profession: 'forester',
-    placement: { kind: 'land' },
+    placement: { kind: 'within', hosts: ['woodcutter_camp', 'lumber_camp'] },
     requires: 'r_forestry',
     tier: 1,
     fireRisk: 0.8,
-    desc: "Replante les arbres dans son rayon. La clé d'une forêt qui ne s'épuise jamais.",
+    desc: "Se pose dans le cercle d'un camp de bûcherons et monte de niveau avec lui : sans ça, la forêt ne repousse jamais aussi vite qu'on la coupe.",
   }),
   gatherer_hut: b({
     id: 'gatherer_hut',
@@ -933,13 +940,13 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     buildWork: 120,
     workers: 2,
     profession: 'miller',
-    placement: { kind: 'land' },
+    placement: { kind: 'within', hosts: ['wheat_field'], margin: 5 },
     requires: 'r_milling',
     recipe: { inputs: { wheat: 3 }, outputs: { flour: 2 }, work: 10 },
     storage: { capacity: 80, accepts: ['wheat', 'flour'] },
     tier: 1,
     fireRisk: 1.4,
-    desc: "Ses ailes tournent au-dessus des toits. Le blé devient farine.",
+    desc: "Se dresse au bord d'un champ de blé, dans sa zone, et monte de niveau avec lui. Le blé devient farine sans traverser le village.",
   }),
   bakery: b({
     id: 'bakery',

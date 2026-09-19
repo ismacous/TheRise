@@ -14,7 +14,8 @@ import { BUILDINGS } from '../data/buildings';
 import type { Building } from '../sim/types';
 import type { World } from '../sim/world';
 import { HEIGHT_SCALE } from './constants';
-import { buildingVisual, type BuildingVisual } from './buildings';
+import { activeRecipe } from '../sim/recipes';
+import { buildingVisual, cropStage, type BuildingVisual } from './buildings';
 
 interface Entry {
   building: Building;
@@ -26,6 +27,8 @@ interface Entry {
   state: string;
   /** Rebuilt when the rank changes: a level II has its own silhouette. */
   level: number;
+  /** Where a field is in its growing cycle; 0 for everything else. */
+  stage: number;
   progressBucket: number;
 }
 
@@ -72,16 +75,18 @@ export class BuildingRenderer {
       seen.add(b.id);
       const existing = this.entries.get(b.id);
       const bucket = b.state === 'building' ? Math.floor((b.buildProgress / Math.max(1, BUILDINGS[b.def].buildWork)) * 3) : 0;
+      const stage = fieldStage(b);
       if (!existing) {
-        this.entries.set(b.id, this.createEntry(world, b, bucket));
+        this.entries.set(b.id, this.createEntry(world, b, bucket, stage));
       } else if (
         existing.state !== b.state ||
         existing.level !== b.level ||
+        existing.stage !== stage ||
         existing.progressBucket !== bucket
       ) {
         this.group.remove(existing.group);
         disposeEntry(existing);
-        this.entries.set(b.id, this.createEntry(world, b, bucket));
+        this.entries.set(b.id, this.createEntry(world, b, bucket, stage));
       }
     }
     for (const [id, entry] of this.entries) {
@@ -92,8 +97,8 @@ export class BuildingRenderer {
     }
   }
 
-  private createEntry(world: World, b: Building, bucket: number): Entry {
-    const visual = buildingVisual(b.def, b.state, b.level);
+  private createEntry(world: World, b: Building, bucket: number, stage: number): Entry {
+    const visual = buildingVisual(b.def, b.state, b.level, stage);
     const group = new Group();
     group.name = `building-${b.id}`;
     const body = new Mesh(visual.geometry, this.material);
@@ -126,6 +131,7 @@ export class BuildingRenderer {
       visual,
       state: b.state,
       level: b.level,
+      stage,
       progressBucket: bucket,
     };
   }
@@ -196,6 +202,20 @@ export class BuildingRenderer {
     this.glow.geometry.dispose();
     (this.glow.material as MeshBasicMaterial).dispose();
   }
+}
+
+/**
+ * A field's position in its growing cycle, or 0 for anything that does not
+ * grow. Farms are the only buildings whose body changes as they work, so the
+ * geometry cache gains one more key rather than every building gaining a
+ * per-instance mesh.
+ */
+function fieldStage(b: Building): number {
+  const def = BUILDINGS[b.def];
+  if (def.category !== 'farming' || b.state !== 'active') return 0;
+  const recipe = activeRecipe(b);
+  if (!recipe || recipe.work <= 0) return 0;
+  return cropStage(b.work / recipe.work);
 }
 
 function disposeEntry(_e: Entry): void {

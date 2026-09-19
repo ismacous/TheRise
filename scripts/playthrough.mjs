@@ -27,17 +27,30 @@ await page.waitForFunction(() => !!window.theRise, null, { timeout: 30000 });
 await page.evaluate(() => window.theRise.closeDialogs?.());
 
 const built = await page.evaluate(() => {
-  const { game: g, RESEARCH, createVillager, workerSlots } = window.theRise;
+  const { game: g, BUILDINGS, RESEARCH, createVillager, workerSlots } = window.theRise;
   const w = g.world;
   w.treasury = 20000;
   for (const id of Object.keys(RESEARCH)) w.research.completed.add(id);
 
+  // Some buildings must stand inside another's ground (the forester in a
+  // woodcutters' circle, the mill in a field's square), so the search spirals
+  // out from the host when there is one rather than from the town hall.
   const place = (def, node, min = 8) => {
-    for (let r = 4; r < 70; r++) {
+    const rule = BUILDINGS[def].placement;
+    let ox = w.startX;
+    let oy = w.startY;
+    if (rule.kind === 'within') {
+      const host = w.buildingList.find((b) => rule.hosts.includes(b.def));
+      if (host) {
+        ox = host.cx;
+        oy = host.cy;
+      }
+    }
+    for (let r = 1; r < 70; r++) {
       for (let a = 0; a < 56; a++) {
         const ang = (a / 56) * Math.PI * 2;
-        const x = Math.round(w.startX + Math.cos(ang) * r);
-        const y = Math.round(w.startY + Math.sin(ang) * r);
+        const x = Math.round(ox + Math.cos(ang) * r);
+        const y = Math.round(oy + Math.sin(ang) * r);
         if (!w.canPlace(def, x, y).ok) continue;
         if (node) {
           let n = 0;

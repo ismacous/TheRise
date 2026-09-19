@@ -142,6 +142,36 @@ Trois dépendances croisées structurent la partie :
    avancée s'arrête — ce qui pousse à construire une vraie filière plutôt qu'à
    empiler des camps.
 
+### Bâtiments dans les bâtiments
+
+Deux couples ne se posent pas n'importe où et ne montent pas en niveau l'un
+sans l'autre :
+
+| Dépendant | Doit être posé | Zone |
+|---|---|---|
+| Hutte du forestier | Dans un camp de bûcherons ou une exploitation | Le **cercle** de coupe du camp |
+| Moulin à vent | Dans un champ de blé | Le **rectangle** du champ, élargi de 5 cases |
+
+La règle de placement `{ kind: 'within', hosts, margin }` prend la forme de
+son hôte : un hôte qui récolte prête son cercle de récolte, tout autre hôte
+prête son emprise élargie. Pendant la pose, l'anneau affiché est celui de
+l'hôte, pas celui du bâtiment posé — sans ça le joueur cherche à l'aveugle.
+
+Améliorer l'un améliore l'autre, gratuitement et dans les deux sens. Un camp
+qui dépasse son forestier vide la forêt ; un champ qui dépasse son moulin
+accumule du blé que personne ne moud.
+
+### Le champ au fil de l'année
+
+Un champ traverse cinq états visibles, déduits de sa progression vers la
+prochaine moisson : chaume et gerbes juste après la récolte, terre retournée,
+jeunes pousses, tiges vertes, puis épis mûrs et lourds. C'était auparavant une
+image figée de blé mûr quel que soit ce que le champ faisait, ce qui réduisait
+toute la filière agricole à un nombre dans un panneau.
+
+La géométrie reste partagée : le cache des silhouettes gagne une clé
+(type, état, niveau, **stade**), et seuls les champs ont un stade non nul.
+
 ### Paliers d'amélioration
 
 Sept familles montent en gamme sur place, en conservant l'équipe et le stock :

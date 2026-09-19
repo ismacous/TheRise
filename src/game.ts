@@ -4,6 +4,8 @@ import { SoundEngine } from './render/audio';
 import { HEIGHT_SCALE } from './render/constants';
 import { createNewGame, type Simulation } from './sim/simulation';
 import { deserialize, readSave, writeSave } from './sim/save';
+import { gatherRadius } from './sim/levels';
+import type { Building } from './sim/types';
 import type { World } from './sim/world';
 import type { WorldGenOptions } from './sim/worldgen';
 import type { GameApi, QualityLevel, SheetId } from './ui/api';
@@ -500,7 +502,21 @@ export class Game implements GameApi {
     // siting a camp well is the single most impactful decision in the game.
     const def = BUILDINGS[id];
     const radius = def.gather?.radius ?? (def.service && def.service.radius > 0 ? def.service.radius : 0);
-    if (radius > 0) this.renderer.markers.showRadius(cx, groundY, cy, radius);
+    if (radius > 0) {
+      this.renderer.markers.showRadius(cx, groundY, cy, radius);
+    } else if (def.placement.kind === 'within') {
+      // A building that has to sit inside somebody else's ground shows *that*
+      // ground instead of its own, or the player is guessing where it may go.
+      const host = this.nearestHost(id, cx, cy);
+      if (host) {
+        const hostY = this.world.map.footprintElevation(host.x, host.y, host.w, host.h) * HEIGHT_SCALE;
+        const hostDef = BUILDINGS[host.def];
+        const hostRadius = hostDef.gather
+          ? gatherRadius(host)
+          : Math.max(host.w, host.h) / 2 + (def.placement.margin ?? 3);
+        this.renderer.markers.showRadius(host.cx, hostY, host.cy, hostRadius);
+      }
+    }
 
     let resources = 0;
     let label = '';
@@ -517,6 +533,23 @@ export class Game implements GameApi {
       label = 'de fertilité';
     }
     this.placementInfo = { valid: check.ok, reason: check.reason, resources, label };
+  }
+
+  /** Closest building this one is allowed to sit inside, for the ghost ring. */
+  private nearestHost(id: BuildingId, cx: number, cy: number): Building | null {
+    const rule = BUILDINGS[id].placement;
+    if (rule.kind !== 'within') return null;
+    let best: Building | null = null;
+    let bestD = Infinity;
+    for (const b of this.world.buildingList) {
+      if (!rule.hosts.includes(b.def)) continue;
+      const d = (b.cx - cx) ** 2 + (b.cy - cy) ** 2;
+      if (d < bestD) {
+        bestD = d;
+        best = b;
+      }
+    }
+    return best;
   }
 
   private wireLifecycle(): void {

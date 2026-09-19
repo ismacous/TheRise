@@ -4,6 +4,7 @@ import { WORN_TRAIL } from '../src/sim/paths';
 import { happinessTarget } from '../src/sim/villagers';
 import { BUILDINGS, type BuildingId } from '../src/data/buildings';
 import { ALL_RESEARCH_IDS } from '../src/data/research';
+import { CROP_STAGES, cropStage } from '../src/render/buildings';
 import type { World } from '../src/sim/world';
 
 function run(sim: Simulation, seconds: number): void {
@@ -23,6 +24,19 @@ function fund(w: World): void {
   for (const good of ['stone', 'planks', 'logs'] as const) w.addToStock(good, 400);
   w.refreshStockCache();
   for (const id of ALL_RESEARCH_IDS) w.research.completed.add(id);
+}
+
+/** First legal spot for `def`, spiralling out from a point. */
+function spotNear(w: World, def: BuildingId, ox: number, oy: number) {
+  for (let r = 1; r < 24; r++) {
+    for (let a = 0; a < 40; a++) {
+      const ang = (a / 40) * Math.PI * 2;
+      const x = Math.round(ox + Math.cos(ang) * r);
+      const y = Math.round(oy + Math.sin(ang) * r);
+      if (w.canPlace(def, x, y).ok) return { x, y };
+    }
+  }
+  return null;
 }
 
 /** Drops a finished building on the first legal spot spiralling out of town. */
@@ -165,5 +179,75 @@ describe('work and happiness', () => {
     const stalled = happinessTarget(w, v);
 
     expect(running).toBeGreaterThan(stalled);
+  });
+});
+
+describe('buildings inside buildings', () => {
+  /**
+   * A woodcutters' camp that outgrows its forester strips the wood bare, and a
+   * mill on the far side of the village means every sheaf crosses it twice.
+   * Both are now sited inside their host and improve with it.
+   */
+  it('refuses a forester hut outside a woodcutters circle, and allows one inside', () => {
+    const sim = createNewGame({ seed: 'nested' });
+    const w = sim.world;
+    fund(w);
+
+    // Nothing to sit inside yet.
+    const far = w.canPlace('forester_hut', Math.floor(w.startX) + 30, Math.floor(w.startY) + 30);
+    expect(far.ok).toBe(false);
+    expect(far.reason).toContain('zone');
+
+    const camp = placeNearStart(w, 'woodcutter_camp')!;
+    expect(camp).toBeTruthy();
+    // Somewhere free inside the camp's circle, rather than on top of the camp.
+    const spot = spotNear(w, 'forester_hut', camp.cx, camp.cy);
+    expect(spot).toBeTruthy();
+    expect(w.canPlace('forester_hut', spot!.x, spot!.y).ok).toBe(true);
+    expect(w.hostFor('forester_hut', spot!.x, spot!.y, 2, 2)?.id).toBe(camp.id);
+  });
+
+  it('puts the mill inside the field it grinds for', () => {
+    const sim = createNewGame({ seed: 'mill' });
+    const w = sim.world;
+    fund(w);
+    const field = placeNearStart(w, 'wheat_field');
+    if (!field) return; // No fertile ground on this seed; nothing to assert.
+    expect(w.canPlace('windmill', Math.floor(w.startX) + 40, Math.floor(w.startY) + 40).ok).toBe(false);
+    expect(w.hostFor('windmill', field.x, field.y - 4, 3, 3)?.id).toBe(field.id);
+  });
+
+  it('raises the forester with the camp, free of charge', () => {
+    const sim = createNewGame({ seed: 'linked' });
+    const w = sim.world;
+    fund(w);
+    const camp = placeNearStart(w, 'woodcutter_camp')!;
+    const spot = spotNear(w, 'forester_hut', camp.cx, camp.cy)!;
+    const hut = w.place('forester_hut', spot.x, spot.y, 0, true);
+    expect(hut).toBeTruthy();
+    expect(hut!.level).toBe(1);
+
+    camp.upgrade = { toDef: null, toLevel: 2, progress: 0, total: 1 };
+    w.finishUpgrade(camp.id);
+
+    expect(camp.level).toBe(2);
+    expect(hut!.level).toBe(2);
+  });
+});
+
+describe('the field through its year', () => {
+  it('walks the whole cycle instead of standing ripe for ever', () => {
+    // Stubble, then turned earth, shoots, green, ripe, and round again.
+    expect(cropStage(0)).toBe(4);
+    expect(cropStage(0.2)).toBe(0);
+    expect(cropStage(0.4)).toBe(1);
+    expect(cropStage(0.7)).toBe(2);
+    expect(cropStage(0.95)).toBe(3);
+    // Every value maps somewhere; nothing falls through.
+    for (let t = 0; t <= 1.0001; t += 0.01) {
+      const s = cropStage(t);
+      expect(s).toBeGreaterThanOrEqual(0);
+      expect(s).toBeLessThan(CROP_STAGES);
+    }
   });
 });

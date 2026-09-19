@@ -38,20 +38,39 @@ export function buildingVisual(
   defId: BuildingId,
   state: BuildingState,
   level = 1,
+  stage = 0,
 ): BuildingVisual {
   const lv = Math.max(1, Math.min(MAX_VISUAL_LEVEL, Math.round(level)));
-  const key = `${defId}:${state}:${lv}`;
+  const st = Math.max(0, Math.min(CROP_STAGES - 1, Math.round(stage)));
+  const key = `${defId}:${state}:${lv}:${st}`;
   const hit = cache.get(key);
   if (hit) return hit;
-  const v = make(defId, state, lv);
+  const v = make(defId, state, lv, st);
   cache.set(key, v);
   return v;
+}
+
+/** Tilled, sprouting, growing, ripe, harvested. */
+export const CROP_STAGES = 5;
+
+/**
+ * Where a field is in its cycle, from its progress toward the next harvest.
+ * Progress restarts at zero the instant a crop comes in, so zero is stubble,
+ * not bare earth.
+ */
+export function cropStage(progress: number): number {
+  const t = Math.max(0, Math.min(0.999, progress));
+  if (t < 0.1) return 4;
+  if (t < 0.3) return 0;
+  if (t < 0.55) return 1;
+  if (t < 0.8) return 2;
+  return 3;
 }
 
 /** Levels beyond this one reuse the top silhouette. */
 export const MAX_VISUAL_LEVEL = 3;
 
-function make(defId: BuildingId, state: BuildingState, lv: number): BuildingVisual {
+function make(defId: BuildingId, state: BuildingState, lv: number, stage = 0): BuildingVisual {
   const def = BUILDINGS[defId];
   const [W, D] = def.size;
   const b = new MeshBuilder();
@@ -263,10 +282,10 @@ function make(defId: BuildingId, state: BuildingState, lv: number): BuildingVisu
 
     // ── Farming ──────────────────────────────────────────────────────────
     case 'wheat_field':
-      out.height = buildField(b, W, D, C.crop, out);
+      out.height = buildField(b, W, D, C.crop, out, stage, lv);
       break;
     case 'flax_field':
-      out.height = buildField(b, W, D, new Color('#93b089').convertSRGBToLinear(), out);
+      out.height = buildField(b, W, D, new Color('#93b089').convertSRGBToLinear(), out, stage, lv);
       break;
     case 'chicken_coop':
       out.height = buildPasture(b, W, D, 'chicken', out, lv);
@@ -975,22 +994,93 @@ function addHeadframe(b: MeshBuilder, x: number, z: number): void {
   b.cylinder(x, 2.35, z, 0.28, 0.12, 8, C.metal);
 }
 
-function buildField(b: MeshBuilder, W: number, D: number, crop: Color, out: BuildingVisual): number {
+/**
+ * A field through its year: turned earth, shoots, green stalks, heavy ripe
+ * ears, then stubble and stooks after the harvest. It used to be a single
+ * frozen image of a ripe crop whatever the field was actually doing, which
+ * made the whole farming chain read as a number in a panel.
+ */
+function buildField(
+  b: MeshBuilder,
+  W: number,
+  D: number,
+  crop: Color,
+  out: BuildingVisual,
+  stage: number,
+  lv: number,
+): number {
   const w = W - 0.2;
   const d = D - 0.2;
-  b.box(0, -0.04, 0, w, 0.1, d, C.dirt);
+  const soil = stage === 0 ? C.dirt : C.dirt.clone().multiplyScalar(0.94);
+  b.box(0, -0.04, 0, w, 0.1, d, soil);
+
   const rows = Math.max(3, Math.floor(d / 0.55));
+  const rowZ = (i: number): number => -d / 2 + 0.3 + (i * (d - 0.6)) / Math.max(1, rows - 1);
+  const young = C.cropYoung;
+
   for (let i = 0; i < rows; i++) {
-    const z = -d / 2 + 0.3 + (i * (d - 0.6)) / Math.max(1, rows - 1);
-    b.boxOn(0, 0.02, z, w - 0.25, 0.22, 0.2, crop);
-    b.boxOn(0, 0.02, z, w - 0.25, 0.3, 0.07, crop.clone().multiplyScalar(1.1));
+    const z = rowZ(i);
+    switch (stage) {
+      case 0:
+        // Ploughed: nothing but ridges of turned soil.
+        b.boxOn(0, 0.01, z, w - 0.2, 0.09, 0.26, C.dirt.clone().multiplyScalar(1.12));
+        break;
+      case 1:
+        // Shoots, a hand high.
+        b.boxOn(0, 0.01, z, w - 0.2, 0.06, 0.24, C.dirt.clone().multiplyScalar(1.1));
+        for (let k = 0; k < 5; k++) {
+          const x = -w / 2 + 0.35 + (k * (w - 0.7)) / 4;
+          b.cone(x, 0.05, z, 0.07, 0.16, 4, young);
+        }
+        break;
+      case 2:
+        // Green and growing, not yet turned.
+        b.boxOn(0, 0.02, z, w - 0.25, 0.34, 0.2, young);
+        b.boxOn(0, 0.02, z, w - 0.25, 0.44, 0.07, young.clone().multiplyScalar(1.08));
+        break;
+      case 3:
+        // Ripe: taller, golden, with heads that catch the light.
+        b.boxOn(0, 0.02, z, w - 0.25, 0.46, 0.22, crop);
+        b.boxOn(0, 0.02, z, w - 0.25, 0.6, 0.08, crop.clone().multiplyScalar(1.12));
+        for (let k = 0; k < 4; k++) {
+          const x = -w / 2 + 0.45 + (k * (w - 0.9)) / 3;
+          b.blob(x, 0.66, z, 0.06, 0.1, 0.06, crop.clone().multiplyScalar(1.2));
+        }
+        break;
+      default:
+        // Harvested: stubble, and the straw gathered into stooks.
+        b.boxOn(0, 0.01, z, w - 0.25, 0.1, 0.18, crop.clone().multiplyScalar(0.8));
+        break;
+    }
   }
+
+  if (stage === 4) {
+    for (let k = 0; k < 3; k++) {
+      const x = -w / 2 + 0.7 + (k * (w - 1.4)) / 2;
+      b.cone(x, 0, d / 2 - 0.6, 0.26, 0.62, 6, crop.clone().multiplyScalar(0.95));
+    }
+  }
+
   // A scarecrow reads instantly as "this is a farm".
   b.cylinder(w / 2 - 0.4, 0, -d / 2 + 0.4, 0.05, 0.85, 4, C.beam);
   b.box(w / 2 - 0.4, 0.62, -d / 2 + 0.4, 0.6, 0.06, 0.06, C.beam);
   b.blob(w / 2 - 0.4, 0.92, -d / 2 + 0.4, 0.14, 0.14, 0.14, C.roofThatch);
+  // Rank shows as a fenced, tended field with a water butt and a cart track.
+  if (lv >= 2) {
+    for (const sz of [-1, 1]) {
+      for (let k = -2; k <= 2; k++) {
+        b.boxOn((k * w) / 5, 0, (sz * d) / 2, 0.06, 0.34, 0.06, C.beam);
+      }
+      b.box(0, 0.26, (sz * d) / 2, w, 0.04, 0.04, C.beam);
+    }
+    b.cylinder(-w / 2 + 0.4, 0, -d / 2 + 0.4, 0.18, 0.34, 8, C.wallWoodDark, 0.94);
+  }
+  if (lv >= 3) {
+    b.boxOn(-w / 2 + 0.45, 0, d / 2 - 0.5, 0.75, 0.3, 0.45, C.wallWood, 0.2);
+    b.gableRoof(-w / 2 + 0.45, 0.3, d / 2 - 0.5, 0.75, 0.45, 0.24, C.roofThatch, 0, 0.1);
+  }
   out.lights = [];
-  return 0.5;
+  return 0.9;
 }
 
 function buildPasture(

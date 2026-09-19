@@ -7,7 +7,15 @@ import { generateWorld, type WorldGenOptions } from './worldgen';
 import { PathFinder } from './pathfinding';
 import { SpatialGrid } from './spatial';
 import { computeModifiers, type Modifiers } from './modifiers';
-import { housingCapacity, serviceRadius, storageCapacity, upgradeTargetOf, workerSlots } from './levels';
+import {
+  gatherRadius,
+  housingCapacity,
+  maxLevelOf,
+  serviceRadius,
+  storageCapacity,
+  upgradeTargetOf,
+  workerSlots,
+} from './levels';
 import { createPartnerRuntime, type PartnerRuntime } from './economy';
 import { randomVillageName } from '../data/names';
 import { TRADE_PARTNERS } from '../data/trade';
@@ -287,6 +295,10 @@ export class World {
         return { ok: false, reason: 'Doit couvrir un gisement' };
       }
     }
+    if (def.placement.kind === 'within' && !this.hostFor(defId, x, y, w, h)) {
+      const names = def.placement.hosts.map((id) => BUILDINGS[id].name).join(' ou ');
+      return { ok: false, reason: `À poser dans la zone d'un ${names}` };
+    }
     if (def.category === 'farming' && this.averageFertility(x, y, w, h) < 0.25) {
       return { ok: false, reason: 'Terre trop pauvre' };
     }
@@ -294,6 +306,78 @@ export class World {
       return { ok: false, reason: 'Aucun accès : laissez un passage' };
     }
     return { ok: true, reason: '' };
+  }
+
+  /**
+   * The building whose working ground covers this footprint, or null.
+   *
+   * A gathering host claims a circle — its own harvesting radius, so the
+   * forester plants exactly where the woodcutters cut. Anything else claims
+   * its footprint grown by `margin`, which is what turns a wheat field into a
+   * rectangular estate the mill can stand in.
+   */
+  hostFor(defId: BuildingId, x: number, y: number, w: number, h: number): Building | null {
+    const rule = BUILDINGS[defId].placement;
+    if (rule.kind !== 'within') return null;
+    const cx = x + w / 2;
+    const cy = y + h / 2;
+    for (const b of this.buildingList) {
+      if (!rule.hosts.includes(b.def)) continue;
+      if (b.state !== 'active' && b.state !== 'building' && b.state !== 'planned') continue;
+      if (BUILDINGS[b.def].gather) {
+        const radius = gatherRadius(b);
+        if ((b.cx - cx) ** 2 + (b.cy - cy) ** 2 <= radius * radius) return b;
+        continue;
+      }
+      const margin = rule.margin ?? 3;
+      if (
+        x + w > b.x - margin &&
+        x < b.x + b.w + margin &&
+        y + h > b.y - margin &&
+        y < b.y + b.h + margin
+      ) {
+        return b;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Buildings whose rank is tied to this one's, in both directions: a
+   * forester's hut and the camp it stands in improve together, and so do a
+   * mill and its field. Improving one and not the other leaves the pair
+   * unbalanced — a camp that outcuts its forester empties the wood.
+   */
+  linkedBuildings(b: Building): Building[] {
+    const out: Building[] = [];
+    const rule = BUILDINGS[b.def].placement;
+    if (rule.kind === 'within') {
+      const host = this.hostFor(b.def, b.x, b.y, b.w, b.h);
+      if (host) out.push(host);
+    }
+    for (const other of this.buildingList) {
+      if (other.id === b.id) continue;
+      const otherRule = BUILDINGS[other.def].placement;
+      if (otherRule.kind !== 'within' || !otherRule.hosts.includes(b.def)) continue;
+      if (this.hostFor(other.def, other.x, other.y, other.w, other.h)?.id === b.id) out.push(other);
+    }
+    return out;
+  }
+
+  /** Brings every linked building up to `level`, free of charge. */
+  raiseLinked(b: Building, level: number): void {
+    for (const other of this.linkedBuildings(b)) {
+      const capped = Math.min(maxLevelOf(other.def), level);
+      if (other.level >= capped) continue;
+      other.level = capped;
+      this.notify(
+        `${BUILDINGS[other.def].name} suit : niveau ${other.level}`,
+        'build',
+        'good',
+        other.cx,
+        other.cy,
+      );
+    }
   }
 
   footprintHasNode(x: number, y: number, w: number, h: number, kind: NodeKind): boolean {
@@ -492,7 +576,10 @@ export class World {
     if (!toDef) {
       b.level = toLevel;
       this.layoutVersion++;
-      this.notify(`${BUILDINGS[b.def].name} amélioré au niveau ${toLevel}`, '', 'good', b.cx, b.cy);
+      this.notify(`${BUILDINGS[b.def].name} amélioré au niveau ${toLevel}`, 'build', 'good', b.cx, b.cy);
+      // A camp and its forester, a field and its mill: they rise together, at
+      // no extra cost. A camp that outgrows its forester strips the wood.
+      this.raiseLinked(b, toLevel);
       return;
     }
 
@@ -528,7 +615,9 @@ export class World {
       created.residents.push(vid);
       v.homeId = created.id;
     }
-    this.notify(`${next.name} : travaux terminés`, '', 'good', created.cx, created.cy);
+    this.notify(`${next.name} : travaux terminés`, 'build', 'good', created.cx, created.cy);
+    // Moving up a tier is an improvement too, so the pair keeps pace.
+    this.raiseLinked(created, Math.max(created.level, b.level) + 1);
   }
 
   // ── Manual staffing ──────────────────────────────────────────────────────
