@@ -24,6 +24,8 @@ interface Entry {
   rotorSpeed: number;
   visual: BuildingVisual;
   state: string;
+  /** Rebuilt when the rank changes: a level II has its own silhouette. */
+  level: number;
   progressBucket: number;
 }
 
@@ -72,7 +74,11 @@ export class BuildingRenderer {
       const bucket = b.state === 'building' ? Math.floor((b.buildProgress / Math.max(1, BUILDINGS[b.def].buildWork)) * 3) : 0;
       if (!existing) {
         this.entries.set(b.id, this.createEntry(world, b, bucket));
-      } else if (existing.state !== b.state || existing.progressBucket !== bucket) {
+      } else if (
+        existing.state !== b.state ||
+        existing.level !== b.level ||
+        existing.progressBucket !== bucket
+      ) {
         this.group.remove(existing.group);
         disposeEntry(existing);
         this.entries.set(b.id, this.createEntry(world, b, bucket));
@@ -87,7 +93,7 @@ export class BuildingRenderer {
   }
 
   private createEntry(world: World, b: Building, bucket: number): Entry {
-    const visual = buildingVisual(b.def, b.state);
+    const visual = buildingVisual(b.def, b.state, b.level);
     const group = new Group();
     group.name = `building-${b.id}`;
     const body = new Mesh(visual.geometry, this.material);
@@ -119,6 +125,7 @@ export class BuildingRenderer {
       rotorSpeed: visual.rotor?.speed ?? 0,
       visual,
       state: b.state,
+      level: b.level,
       progressBucket: bucket,
     };
   }

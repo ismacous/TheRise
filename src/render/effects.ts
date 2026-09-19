@@ -217,7 +217,7 @@ export class ParticleSystem {
         continue;
       }
       if (b.state !== 'active' || !b.enabled) continue;
-      const visual = buildingVisual(b.def, 'active');
+      const visual = buildingVisual(b.def, 'active', b.level);
       if (!visual.smoke) continue;
       const def = BUILDINGS[b.def];
       const working = def.workers === 0 || (b.workers.length > 0 && !b.stall);

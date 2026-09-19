@@ -15,6 +15,10 @@ Jeu de gestion médiéval pour Android. Lisez `docs/DESIGN.md` avant de toucher
 3. **Aucun asset externe.** Toute la géométrie est assemblée dans
    `src/render/meshBuilder.ts`. N'ajoutez pas de fichier `.glb` ou de texture :
    ça casserait la cohérence de style et la taille de l'APK.
+   Les silhouettes vivent dans `src/render/buildings.ts`, en cache par
+   (type, état, **niveau**). Un atelier garde une cour devant lui
+   (`yardDepth` / `yardZ`) : un accessoire posé au bord de l'emprise finit
+   *dans* les murs et ne se voit jamais.
 4. **L'interface est du DOM simple.** Pas de framework, pas de bundler
    supplémentaire.
 
@@ -34,7 +38,12 @@ npm run build:fast
 npx vite preview --port 4173 --host 127.0.0.1 &
 node scripts/screenshot.mjs http://127.0.0.1:4173/ /tmp/shots 12   # captures
 node scripts/stress.mjs     http://127.0.0.1:4173/ /tmp/stress      # charge
+node scripts/ranks.mjs      http://127.0.0.1:4173/ /tmp/ranks bakery,forge  # rangs
 ```
+
+`scripts/ranks.mjs` pose un bâtiment aux niveaux I, II et III côte à côte et
+photographie le résultat : c'est le moyen le plus rapide de vérifier qu'un
+bâtiment reste reconnaissable et que son niveau se lit au premier coup d'œil.
 
 `scripts/stress.mjs` affiche le coût d'un tick de simulation. **Surveillez-le :
 il est déjà passé de 14,6 ms à 1,1 ms pour une cité de 410 habitants, et il

@@ -280,8 +280,13 @@ d'urgence coûteux en temps plutôt qu'interdit.
   couleur par tuile issue d'un bruit basse fréquence, ombrage des pentes.
 - **Végétation** : géométries fusionnées par chunk, reconstruites par budget de
   deux chunks par image.
-- **Bâtiments** : une géométrie partagée par (type, état), donc cent chaumières
-  ne coûtent qu'un seul buffer. Pièces animées séparées.
+- **Bâtiments** : une géométrie partagée par (type, état, **niveau**), donc cent
+  chaumières du même rang ne coûtent qu'un seul buffer. Pièces animées séparées.
+  Chaque bâtiment a ses accessoires — la tente et le feu du camp de chasse, la
+  scie et les planches de la scierie, le four du boulanger, le métier à tisser
+  — posés dans la cour que l'atelier garde devant lui. Le rang se lit sans
+  connaître le bâtiment : une bordure de pierre au niveau II, un fanion, puis
+  deux fanions et un épi doré au niveau III.
 - **Villageois** : quatre `InstancedMesh` (tenue, peau, cheveux, charge) avec
   couleur par instance. La population entière coûte quatre draw calls.
 - **Éclairage** : un soleil directionnel dont l'ombre est dimensionnée sur le
