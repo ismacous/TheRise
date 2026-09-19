@@ -42,10 +42,23 @@ export const QUALITY_PRESETS: Record<'low' | 'medium' | 'high', RenderQuality> =
 
 /** Three's physical lighting units, relative to the pre-r155 behaviour. */
 const LIGHT_SCALE = Math.PI;
+/**
+ * Exposure, by day and by night.
+ *
+ * This is the lever that finally made the night readable, and the one I
+ * should have reached for first. ACES has a long toe: everything below about
+ * a tenth is pulled towards black, so lifting a dark scene by adding light
+ * fights the curve the whole way and a doubling of the ambient buys almost
+ * nothing on screen. Opening the exposure moves the whole image up the curve
+ * instead — the same thing an eye does when the sun goes down, and the reason
+ * a moonlit field looks like a field rather than a void.
+ */
+const DAY_EXPOSURE = 1.15;
+const NIGHT_EXPOSURE = 2.05;
 /** Bounce colour off the ground by day; see `NIGHT_HEMI_GROUND` for the rest. */
 const HEMI_GROUND = new Color(0x5a6a4a).convertSRGBToLinear();
 
-const NIGHT_SKY = new Color('#1b2f55').convertSRGBToLinear();
+const NIGHT_SKY = new Color('#24406f').convertSRGBToLinear();
 const DUSK_SKY = new Color('#e4926a').convertSRGBToLinear();
 /**
  * Night is a blue veil, not an absence of light.
@@ -64,7 +77,7 @@ const DUSK_SKY = new Color('#e4926a').convertSRGBToLinear();
  * deep blue wash over everything, bright enough to read the map by, with the
  * lit windows standing out warm against it. Nobody mistakes it for day.
  */
-const NIGHT_AMBIENT = new Color('#8fabe0').convertSRGBToLinear();
+const NIGHT_AMBIENT = new Color('#93aede').convertSRGBToLinear();
 /** The moon is a cold light, and reading as *cold* is what sells the hour. */
 const MOONLIGHT = new Color('#c0d3f4').convertSRGBToLinear();
 const NIGHT_HEMI_SKY = new Color('#88a2cf').convertSRGBToLinear();
@@ -115,7 +128,7 @@ export class GameRenderer {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, quality.pixelRatio));
     this.renderer.outputColorSpace = SRGBColorSpace;
     this.renderer.toneMapping = ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.15;
+    this.renderer.toneMappingExposure = DAY_EXPOSURE;
     this.renderer.shadowMap.enabled = quality.shadows;
     this.renderer.shadowMap.type = PCFSoftShadowMap;
 
@@ -285,13 +298,17 @@ export class GameRenderer {
     this.sun.color.copy(sunColor);
     // The moon still casts: without a directional at night the roofs lose
     // their edges and the village turns into a flat stain.
-    this.sun.intensity = lerp(0.40, 1.55, daylight) * LIGHT_SCALE;
+    this.sun.intensity = lerp(0.5, 1.55, daylight) * LIGHT_SCALE;
+
+    // Open the lens as the light goes. A storm dims it a little on top.
+    this.renderer.toneMappingExposure =
+      lerp(NIGHT_EXPOSURE, DAY_EXPOSURE, daylight) * (1 - this.world.wetness * 0.12);
 
     const rainDim = 1 - this.world.wetness * 0.35;
-    this.hemi.intensity = lerp(0.5, 0.6, daylight) * rainDim * LIGHT_SCALE;
+    this.hemi.intensity = lerp(0.62, 0.6, daylight) * rainDim * LIGHT_SCALE;
     this.hemi.color.copy(p.sky).lerp(NIGHT_HEMI_SKY, night);
     this.hemi.groundColor.copy(HEMI_GROUND).lerp(NIGHT_HEMI_GROUND, night);
-    this.ambient.intensity = lerp(0.58, 0.42, daylight) * rainDim * LIGHT_SCALE;
+    this.ambient.intensity = lerp(0.8, 0.42, daylight) * rainDim * LIGHT_SCALE;
     this.ambient.color.copy(p.ambient).lerp(NIGHT_AMBIENT, night);
 
     const sky = (this.scene.background as Color) ?? new Color();
