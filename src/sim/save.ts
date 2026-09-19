@@ -177,6 +177,8 @@ export function deserialize(data: SaveData): Simulation {
       recipeIndex: raw.recipeIndex ?? 0,
       level: raw.level ?? 1,
       upgrade: raw.upgrade ? { ...raw.upgrade } : null,
+      repairing: raw.repairing ?? false,
+      demolish: raw.demolish ? { ...raw.demolish } : null,
       // Measured output is not worth saving: half a minute of play rebuilds it,
       // and a stale rate read from a save would be worse than none.
       output: emptyMeter(),

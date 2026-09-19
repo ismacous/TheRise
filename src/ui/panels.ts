@@ -44,6 +44,7 @@ import {
   upgradeTargetOf,
   workerSlots,
 } from '../sim/levels';
+import { repairGoldCost, siteCost, siteWork } from '../sim/build';
 import { outputRates } from '../sim/output';
 import { activeRecipe, recipeOptions, setRecipe } from '../sim/recipes';
 import {
@@ -1637,11 +1638,13 @@ function renderBuilding(api: GameApi, body: HTMLElement, refresh: Refresh): void
   if (b.def === 'town_hall') renderTreasury(api, body, refresh);
 
   // ── Construction ────────────────────────────────────────────────────────
-  if (b.state === 'planned' || b.state === 'building') {
-    body.append(el('div', { class: 'section-title', text: 'Chantier' }));
-    body.append(bar(b.buildProgress / Math.max(1, def.buildWork), 'blue'));
+  if ((b.state === 'planned' || b.state === 'building') && !b.demolish) {
+    body.append(
+      el('div', { class: 'section-title', text: b.repairing ? 'Remise en état' : 'Chantier' }),
+    );
+    body.append(bar(b.buildProgress / Math.max(1, siteWork(b)), 'blue'));
     const missing = el('div', { class: 'cost-row' });
-    for (const [g, need] of Object.entries(def.cost)) {
+    for (const [g, need] of Object.entries(siteCost(b))) {
       const good = g as GoodId;
       const have = b.delivered[good] ?? 0;
       missing.append(goodChip(good, `${have}/${need}`, have < (need as number)));
@@ -1655,11 +1658,53 @@ function renderBuilding(api: GameApi, body: HTMLElement, refresh: Refresh): void
     );
   }
 
-  if (b.state === 'ruined') {
+  if (b.state === 'ruined' && !b.demolish) {
     body.append(
       el('div', {
         class: 'empty-note',
-        text: 'Ces ruines encombrent le terrain. Déblayez-les pour récupérer des matériaux.',
+        text:
+          'Des murs debout et des gravats. Relevez-les — moins cher et plus rapide que de bâtir à neuf, ' +
+          'les matériaux du tas comptant dans la note — ou déblayez le terrain.',
+      }),
+    );
+    const gold = repairGoldCost(b);
+    const check = w.canRepair(b);
+    body.append(el('div', { class: 'section-title', text: 'Coût de la remise en état' }));
+    const costs = el('div', { class: 'cost-row' });
+    if (gold > 0) {
+      costs.append(
+        el('span', { class: `cost ${w.treasury < gold ? 'missing' : ''}` }, [
+          el('span', { class: 'coin' }),
+          el('span', { text: String(gold) }),
+        ]),
+      );
+    }
+    for (const [g, n] of Object.entries(siteCost(b))) {
+      const have = b.delivered[g as GoodId] ?? 0;
+      costs.append(goodChip(g as GoodId, `${Math.min(have, n as number)}/${n}`, have < (n as number)));
+    }
+    body.append(costs);
+    const repair = el('button', {
+      class: `btn ${check.ok ? 'primary' : ''} grow`,
+      text: 'Relever le bâtiment',
+      title: check.reason,
+    });
+    (repair as HTMLButtonElement).disabled = !check.ok;
+    onTap(repair, () => {
+      w.startRepair(b.id);
+      refresh();
+    });
+    body.append(el('div', { class: 'btn-row' }, [repair]));
+    if (!check.ok) body.append(el('div', { class: 'card-desc', text: check.reason }));
+  }
+
+  if (b.demolish) {
+    body.append(el('div', { class: 'section-title', text: 'Démolition' }));
+    body.append(bar(b.demolish.progress / b.demolish.total, 'red'));
+    body.append(
+      el('div', {
+        class: 'card-desc',
+        text: 'Les bâtisseurs démontent la charpente. Une partie des matériaux reviendra au village.',
       }),
     );
   }
@@ -1898,16 +1943,31 @@ function renderBuilding(api: GameApi, body: HTMLElement, refresh: Refresh): void
     actions.append(cancel);
   }
 
-  const demolish = el('button', {
-    class: 'btn danger',
-    text: b.state === 'ruined' ? 'Déblayer' : 'Démolir',
-  });
-  onTap(demolish, () => {
-    w.removeBuilding(b.id, true);
-    api.selectBuilding(null);
-    api.closeSheet();
-  });
-  actions.append(demolish);
+  if (b.demolish) {
+    const stop = el('button', { class: 'btn', text: 'Arrêter la démolition' });
+    onTap(stop, () => {
+      w.cancelDemolish(b.id);
+      refresh();
+    });
+    actions.append(stop);
+  } else {
+    const demolish = el('button', {
+      class: 'btn danger',
+      text: b.state === 'ruined' ? 'Déblayer' : 'Démolir',
+    });
+    onTap(demolish, () => {
+      w.startDemolish(b.id);
+      // A plan nobody has started on goes at once; anything else becomes a
+      // site, and the panel should stay open to show the work happening.
+      if (!w.buildings.has(b.id)) {
+        api.selectBuilding(null);
+        api.closeSheet();
+      } else {
+        refresh();
+      }
+    });
+    actions.append(demolish);
+  }
   body.append(actions);
 }
 

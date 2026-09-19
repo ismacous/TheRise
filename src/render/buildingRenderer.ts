@@ -14,6 +14,7 @@ import { BUILDINGS } from '../data/buildings';
 import type { Building } from '../sim/types';
 import type { World } from '../sim/world';
 import { HEIGHT_SCALE } from './constants';
+import { siteWork } from '../sim/build';
 import { activeRecipe } from '../sim/recipes';
 import { buildingVisual, cropStage, type BuildingVisual } from './buildings';
 
@@ -74,7 +75,9 @@ export class BuildingRenderer {
     for (const b of world.buildingList) {
       seen.add(b.id);
       const existing = this.entries.get(b.id);
-      const bucket = b.state === 'building' ? Math.floor((b.buildProgress / Math.max(1, BUILDINGS[b.def].buildWork)) * 3) : 0;
+      // Against the site's own total, so a repair — which costs less work
+      // than a new build — does not jump straight to a finished silhouette.
+      const bucket = b.state === 'building' ? Math.floor((b.buildProgress / Math.max(1, siteWork(b))) * 3) : 0;
       const stage = fieldStage(b);
       if (!existing) {
         this.entries.set(b.id, this.createEntry(world, b, bucket, stage));

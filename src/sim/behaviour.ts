@@ -18,6 +18,7 @@ import {
   workRate,
   yieldFromNode,
 } from './villagers';
+import { hasAllMaterials as siteHasAllMaterials, siteWork } from './build';
 import { outputMultiplier } from './levels';
 import { recordOutput } from './output';
 import { activeRecipe } from './recipes';
@@ -198,8 +199,9 @@ function findConstructionSite(world: World, v: Villager): Building | null {
   let bestD = Infinity;
   for (const b of world.constructionSites) {
     const isUpgrade = b.state === 'active' && b.upgrade !== null;
-    if (!isUpgrade && b.state !== 'planned' && b.state !== 'building') continue;
-    if (!isUpgrade && !hasAllMaterials(world, b)) continue;
+    const isDemolition = b.demolish !== null;
+    if (!isUpgrade && !isDemolition && b.state !== 'planned' && b.state !== 'building') continue;
+    if (!isUpgrade && !isDemolition && !hasAllMaterials(world, b)) continue;
     const builders = countBuildersOn(world, b.id);
     if (builders >= 4) continue;
     const d = (b.cx - v.x) ** 2 + (b.cy - v.y) ** 2 + builders * 400;
@@ -218,11 +220,7 @@ function countBuildersOn(world: World, id: number): number {
 }
 
 export function hasAllMaterials(_world: World, b: Building): boolean {
-  const cost = BUILDINGS[b.def].cost;
-  for (const [g, need] of Object.entries(cost)) {
-    if ((b.delivered[g as GoodId] ?? 0) < (need as number)) return false;
-  }
-  return true;
+  return siteHasAllMaterials(b);
 }
 
 /** Picks the nearest useful unclaimed job. Endpoints are already resolved. */
@@ -557,7 +555,8 @@ function completeJob(world: World, v: Villager): void {
 function doBuild(world: World, v: Villager, dt: number): void {
   const b = world.buildings.get(v.task.targetId!);
   const upgrading = b?.state === 'active' && b.upgrade !== null;
-  if (!b || (!upgrading && b.state !== 'planned' && b.state !== 'building')) {
+  const demolishing = b?.demolish != null;
+  if (!b || (!upgrading && !demolishing && b.state !== 'planned' && b.state !== 'building')) {
     clearTask(v);
     return;
   }
@@ -565,6 +564,17 @@ function doBuild(world: World, v: Villager, dt: number): void {
     v.state = 'walking';
     const e = world.entranceOf(b);
     if (moveTowards(world, v, dt, e.x, e.y, 1.2)) v.task.phase = 1;
+    return;
+  }
+
+  // Taking a building apart is the same job in reverse, and a little quicker.
+  if (demolishing) {
+    v.state = 'working';
+    b.demolish!.progress += workRate(world, v, 'builder') * world.modifiers.buildSpeed * 1.6 * dt;
+    if (b.demolish!.progress >= b.demolish!.total) {
+      world.finishDemolish(b.id);
+      clearTask(v);
+    }
     return;
   }
 
@@ -588,13 +598,22 @@ function doBuild(world: World, v: Villager, dt: number): void {
   b.state = 'building';
   v.state = 'working';
   const def = BUILDINGS[b.def];
+  const total = siteWork(b);
   b.buildProgress += workRate(world, v, 'builder') * world.modifiers.buildSpeed * 1.4 * dt;
-  if (b.buildProgress >= def.buildWork) {
-    b.buildProgress = def.buildWork;
+  if (b.buildProgress >= total) {
+    b.buildProgress = total;
+    const repaired = b.repairing;
+    b.repairing = false;
     b.state = 'active';
     b.efficiency = 0;
     world.emitter.emit('buildingCompleted', b);
-    world.notify(`${def.name} terminé`, 'build', 'good', b.cx, b.cy);
+    world.notify(
+      repaired ? `${def.name} relevé de ses ruines` : `${def.name} terminé`,
+      'build',
+      'good',
+      b.cx,
+      b.cy,
+    );
     clearTask(v);
   }
 }

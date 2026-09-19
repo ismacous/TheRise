@@ -3,6 +3,7 @@ import { GOODS, type GoodId } from '../data/goods';
 import { collectRadius, storageCapacity } from './levels';
 import { activeRecipe, currentInputs, currentOutputs } from './recipes';
 import type { Building, HaulJob } from './types';
+import { siteCost } from './build';
 import type { World } from './world';
 
 const MAX_JOBS = 160;
@@ -61,8 +62,8 @@ export function rebuildHaulJobs(world: World): void {
     const def = BUILDINGS[b.def];
 
     // 1. Construction sites pulling in their materials.
-    if (b.state === 'planned' || b.state === 'building') {
-      for (const [g, need] of Object.entries(def.cost)) {
+    if ((b.state === 'planned' || b.state === 'building') && !b.demolish) {
+      for (const [g, need] of Object.entries(siteCost(b))) {
         const have = b.delivered[g as GoodId] ?? 0;
         const inFlight = countInFlight(jobs, b.id, g as GoodId);
         const missing = (need as number) - have - inFlight;
@@ -203,8 +204,14 @@ export function rebuildHaulJobs(world: World): void {
   }
 
   world.haulJobs = jobs;
+  // Pulling a building down is builders' work too, so a demolition belongs on
+  // the same list the builders read.
   world.constructionSites = world.buildingList.filter(
-    (b) => b.state === 'planned' || b.state === 'building' || b.upgrade !== null,
+    (b) =>
+      b.demolish !== null ||
+      b.state === 'planned' ||
+      b.state === 'building' ||
+      b.upgrade !== null,
   );
 }
 

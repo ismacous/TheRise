@@ -3,6 +3,9 @@ import { createNewGame } from '../src/sim/simulation';
 import { ALL_RESEARCH_IDS } from '../src/data/research';
 import { taxHappiness, taxIncome } from '../src/sim/economy';
 import { maxLevelOf, storageCapacity, upgradeTargetOf } from '../src/sim/levels';
+import { BUILDINGS } from '../src/data/buildings';
+import { repairGoldCost, siteCost, siteWork } from '../src/sim/build';
+import { rebuildHaulJobs } from '../src/sim/logistics';
 import { computeModifiers } from '../src/sim/modifiers';
 import { outputRates, recordOutput, updateBuildingMeters } from '../src/sim/output';
 import { researchSpeed } from '../src/sim/research';
@@ -123,5 +126,56 @@ describe('the output meter', () => {
     expect(outputRates(b)[0].perMinute).toBe(15);
     for (let i = 0; i < 12; i++) updateBuildingMeters(w, 30);
     expect(outputRates(b)).toEqual([]);
+  });
+});
+
+/**
+ * The valley opens with a handful of collapsed cottages. Clearing one used to
+ * be a button press: instant, free of labour, and with no other option.
+ */
+describe('ruins', () => {
+  function aRuin(seed: string) {
+    const sim = createNewGame({ seed });
+    const w = sim.world;
+    const ruin = w.buildingList.find((b) => b.state === 'ruined')!;
+    return { sim, w, ruin };
+  }
+
+  it('takes hands and time to pull down', () => {
+    const { w, ruin } = aRuin('ruins');
+    expect(ruin).toBeTruthy();
+
+    expect(w.startDemolish(ruin.id)).toBe(true);
+    // Still standing: the order is given, the work is not done.
+    expect(w.buildings.has(ruin.id)).toBe(true);
+    expect(ruin.demolish!.total).toBeGreaterThan(0);
+    expect(ruin.demolish!.progress).toBe(0);
+
+    // And it is a builders' job, so it shows up on the site list.
+    rebuildHaulJobs(w);
+    expect(w.constructionSites).toContain(ruin);
+
+    w.finishDemolish(ruin.id);
+    expect(w.buildings.has(ruin.id)).toBe(false);
+  });
+
+  it('can be raised again for less than building new', () => {
+    const { w, ruin } = aRuin('repair');
+    const def = BUILDINGS[ruin.def];
+    w.treasury = 2000;
+
+    // Cheaper in coin, in materials and in labour than starting from bare
+    // ground — that is the whole reason to keep a ruin.
+    expect(repairGoldCost(ruin)).toBeLessThan(Math.max(1, def.goldCost));
+    expect(siteWork(ruin)).toBeLessThan(def.buildWork);
+    for (const [g, n] of Object.entries(siteCost(ruin))) {
+      expect(n as number).toBeLessThanOrEqual(def.cost[g as keyof typeof def.cost] as number);
+    }
+
+    expect(w.startRepair(ruin.id)).toBe(true);
+    expect(ruin.repairing).toBe(true);
+    expect(ruin.state).toBe('planned');
+    // The rubble already on the plot counts towards the bill.
+    expect(Object.keys(ruin.delivered).length).toBeGreaterThan(0);
   });
 });

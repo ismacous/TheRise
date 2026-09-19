@@ -7,6 +7,7 @@ import { generateWorld, type WorldGenOptions } from './worldgen';
 import { PathFinder } from './pathfinding';
 import { SpatialGrid } from './spatial';
 import { computeModifiers, type Modifiers } from './modifiers';
+import { demolishWork, repairGoldCost } from './build';
 import { emptyMeter } from './output';
 import {
   gatherRadius,
@@ -465,6 +466,8 @@ export class World {
       work: 0,
       recipeIndex: 0,
       efficiency: 0,
+      repairing: false,
+      demolish: null,
       output: emptyMeter(),
       idleTime: 0,
       fire: 0,
@@ -519,6 +522,78 @@ export class World {
     this.haulJobs = this.haulJobs.filter((j) => j.fromId !== id && j.toId !== id);
     this.layoutVersion++;
     this.emitter.emit('buildingDestroyed', b);
+  }
+
+  // ── Ruins: repair or clear, both of which take hands and time ───────────
+
+  /** Can this ruin be put back on its feet? */
+  canRepair(b: Building): PlacementCheck {
+    if (b.state !== 'ruined') return { ok: false, reason: "Ce n'est pas une ruine" };
+    if (b.demolish) return { ok: false, reason: 'Démolition en cours' };
+    const def = BUILDINGS[b.def];
+    if (def.requires && !this.research.completed.has(def.requires)) {
+      return { ok: false, reason: 'Étude manquante' };
+    }
+    const gold = repairGoldCost(b);
+    if (this.treasury < gold) return { ok: false, reason: "Pas assez d'or" };
+    return { ok: true, reason: '' };
+  }
+
+  /**
+   * Turns a ruin back into a building site.
+   *
+   * The salvage already lying on the plot stays where it is and counts
+   * towards the bill, which is most of why repairing beats building new: the
+   * stones are already there.
+   */
+  startRepair(id: number): boolean {
+    const b = this.buildings.get(id);
+    if (!b || !this.canRepair(b).ok) return false;
+    this.spend(repairGoldCost(b), 'build');
+    b.repairing = true;
+    b.state = 'planned';
+    b.enabled = true;
+    b.buildProgress = 0;
+    b.stall = null;
+    this.layoutVersion++;
+    return true;
+  }
+
+  /** Puts a building on the demolition list. Builders do the rest. */
+  startDemolish(id: number): boolean {
+    const b = this.buildings.get(id);
+    if (!b || b.demolish) return false;
+    // A site nobody has built yet is just a plan: cancelling it is immediate.
+    if (b.state === 'planned' && b.buildProgress <= 0 && !b.repairing) {
+      this.removeBuilding(id, true);
+      return true;
+    }
+    b.demolish = { progress: 0, total: demolishWork(b) };
+    b.stall = null;
+    // Workers leave straight away; there is nothing left for them to do here.
+    for (const vid of [...b.workers]) {
+      const v = this.villagerById.get(vid);
+      if (v) {
+        v.workId = 0;
+        v.profession = 'idle';
+        v.task = { kind: 'none' };
+      }
+    }
+    b.workers.length = 0;
+    return true;
+  }
+
+  cancelDemolish(id: number): void {
+    const b = this.buildings.get(id);
+    if (b) b.demolish = null;
+  }
+
+  /** Called by the builders once the last beam is down. */
+  finishDemolish(id: number): void {
+    const b = this.buildings.get(id);
+    if (!b) return;
+    b.demolish = null;
+    this.removeBuilding(id, true);
   }
 
   /** Can the player start improving this building right now? */

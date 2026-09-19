@@ -84,6 +84,13 @@ export interface Building {
   /** Construction progress in work units. */
   buildProgress: number;
   /**
+   * True while this site is a ruin being put back on its feet rather than a
+   * new building going up: it costs a share of the price and of the work.
+   */
+  repairing: boolean;
+  /** Set while builders are pulling the building down. */
+  demolish: { progress: number; total: number } | null;
+  /**
    * In-place level, 1 upward. Buildings with a tier chain swap to the next
    * definition instead; either way the player sees a single "improve" button.
    */
