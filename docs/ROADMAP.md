@@ -12,6 +12,9 @@ date ; c'est l'ordre dans lequel les ajouts auraient le plus de valeur.
 - Quatre saisons, cycle jour/nuit, météo, incendies, épidémies, événements
 - Commerce à quatre paliers avec relation et prix dynamiques
 - 17 objectifs guidés
+- Page Économie : courbes des recettes, dépenses, trésor, bonheur, population
+  et vivres sur une année de jeu, avec la ventilation de chaque pièce gagnée
+  ou dépensée par source
 - Sauvegarde automatique, trois niveaux de qualité, APK produit par CI
 
 ## Ensuite — confort de jeu
@@ -22,32 +25,30 @@ date ; c'est l'ordre dans lequel les ajouts auraient le plus de valeur.
    menu à chaque fois.
 3. **Priorités manuelles.** Pouvoir épingler un bâtiment comme prioritaire à
    l'embauche, ou lui fixer un nombre d'ouvriers.
-4. **Courbes.** Population, bonheur et stocks sur les dix derniers jours, pour
-   comprendre pourquoi ça coince.
-5. **Sauvegardes multiples** et export/import du fichier.
+4. **Sauvegardes multiples** et export/import du fichier.
 
 ## Ensuite — contenu
 
-6. **Chevaux.** Écurie qui accélère les porteurs dans un rayon, et attelages
+5. **Chevaux.** Écurie qui accélère les porteurs dans un rayon, et attelages
    qui doublent la charge. Demandé explicitement, et cohérent avec le ton.
-7. **Verger et rucher.** Fruits, miel, hydromel : une seconde filière de
+6. **Verger et rucher.** Fruits, miel, hydromel : une seconde filière de
    confort qui ne dépend pas des troupeaux.
-8. **Pont et gué.** Franchir les rivières change complètement la lecture de la
+7. **Pont et gué.** Franchir les rivières change complètement la lecture de la
    carte et la logistique.
-9. **Décoration.** Fontaines, arbres plantés, statues : du bonheur contre de
+8. **Décoration.** Fontaines, arbres plantés, statues : du bonheur contre de
    l'or, pour ceux qui aiment embellir.
-10. **Météo saisonnière plus marquée.** Gel qui arrête les champs, crues qui
+9. **Météo saisonnière plus marquée.** Gel qui arrête les champs, crues qui
     coupent les routes.
 
 ## Ensuite — profondeur
 
-11. **Spécialisation des villageois.** Un bûcheron qui coupe depuis dix jours
+10. **Spécialisation des villageois.** Un bûcheron qui coupe depuis dix jours
     travaille plus vite. Donne du poids au fait de ne pas tout réorganiser.
-12. **Classes sociales.** Les demeures veulent du mobilier et des chandelles,
+11. **Classes sociales.** Les demeures veulent du mobilier et des chandelles,
     sous peine de retour à l'état de maison — le cœur de *Foundation*.
-13. **Contrats commerciaux.** Livrer 200 planches en dix jours contre une forte
+12. **Contrats commerciaux.** Livrer 200 planches en dix jours contre une forte
     somme. Un objectif chiffré qui structure une partie entière.
-14. **Fêtes de village.** Dépenser de la bière et de la nourriture pour un pic
+13. **Fêtes de village.** Dépenser de la bière et de la nourriture pour un pic
     de bonheur, une fois par saison.
 
 ## Volontairement écarté

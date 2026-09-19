@@ -174,9 +174,16 @@ export function moveTowards(
   const nx = v.x + (gdx / gl) * step;
   const ny = v.y + (gdy / gl) * step;
 
-  // Never let rounding push a villager into water or a wall.
+  // Never let rounding push a villager into water or a wall. A refused
+  // diagonal is retried one axis at a time: cutting a corner between two
+  // buildings used to reject the step outright, and a villager whose only
+  // route out was that corner walked on the spot until it starved.
   if (world.map.walkable(Math.floor(nx), Math.floor(ny))) {
     v.x = nx;
+    v.y = ny;
+  } else if (world.map.walkable(Math.floor(nx), Math.floor(v.y))) {
+    v.x = nx;
+  } else if (world.map.walkable(Math.floor(v.x), Math.floor(ny))) {
     v.y = ny;
   } else {
     v.path = null;
@@ -395,6 +402,48 @@ export function dropCarried(world: World, v: Villager): void {
   v.carryAmount = 0;
 }
 
+/**
+ * Puts a villager back on walkable ground.
+ *
+ * `moveTowards` refuses every step that would land on an unwalkable tile, so a
+ * villager who ends up standing *inside* one — a building raised on top of
+ * them, terrain flattened under their feet — can never move again. They then
+ * walk on the spot until they starve, with full storehouses a few tiles away.
+ * One array lookup per tick buys immunity from that whole class of bug.
+ */
+export function rescueIfTrapped(world: World, v: Villager): void {
+  const cx = Math.floor(v.x);
+  const cy = Math.floor(v.y);
+  const onSolidGround = world.map.walkable(cx, cy);
+  // A one-tile island counts as trapped too: the tile itself is fine, but a
+  // tree or a new wall has closed every way off it, and A* cannot route out of
+  // somewhere it cannot leave.
+  const hasExit =
+    world.map.walkable(cx + 1, cy) ||
+    world.map.walkable(cx - 1, cy) ||
+    world.map.walkable(cx, cy + 1) ||
+    world.map.walkable(cx, cy - 1);
+  if (onSolidGround && hasExit) return;
+  for (let r = 1; r <= 8; r++) {
+    for (let j = -r; j <= r; j++) {
+      for (let i = -r; i <= r; i++) {
+        if (Math.abs(i) !== r && Math.abs(j) !== r) continue;
+        const x = cx + i;
+        const y = cy + j;
+        if (!world.map.walkable(x, y)) continue;
+        v.x = x + 0.5;
+        v.y = y + 0.5;
+        v.prevX = v.x;
+        v.prevY = v.y;
+        v.path = null;
+        v.stuckTimer = 0;
+        v.bestDist = Infinity;
+        return;
+      }
+    }
+  }
+}
+
 /** Seconds of no progress after which a destination is treated as unreachable. */
 export const STUCK_LIMIT = 12;
 
@@ -420,6 +469,21 @@ export const SATIETY_PER_SECOND = 0.26;
 export const SATIETY_PER_NUTRITION = 22;
 /** Nutrition one villager needs per in-game day, derived for display. */
 export const NUTRITION_PER_DAY = (SATIETY_PER_SECOND * DAY_SECONDS) / SATIETY_PER_NUTRITION;
+
+/**
+ * Every rule that reacts to the larder is expressed here, in days of food, and
+ * nowhere else.
+ *
+ * These numbers are not arbitrary: because hunger is per real second while a
+ * day now lasts twelve minutes, one "day of food" is six times the stock it
+ * used to be. The thresholds inherited from the two-minute day meant a brand
+ * new village started below the exodus line, and no village could ever hold
+ * the six days that immigration demanded — the population could only shrink.
+ * A test pins the opening so that never happens again.
+ */
+export const FOOD_EXODUS_DAYS = 0.75;
+export const FOOD_BIRTH_DAYS = 1.5;
+export const FOOD_IMMIGRATION_DAYS = 2;
 
 export function satietyDecayPerSecond(world: World): number {
   const winter = world.time.season === 'winter' ? 1.25 : 1;

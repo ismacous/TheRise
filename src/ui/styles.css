@@ -1567,3 +1567,185 @@ body {
   margin-bottom: 4px;
   opacity: 0.75;
 }
+
+/* ── Charts and the economy page ────────────────────────────────────────── */
+.chart {
+  width: 100%;
+  height: auto;
+  display: block;
+  margin: 2px 0 4px;
+  background: rgba(0, 0, 0, 0.16);
+  border: 1px solid var(--panel-line);
+  border-radius: var(--radius-sm);
+  overflow: visible;
+}
+
+.chart-grid {
+  stroke: rgba(243, 233, 214, 0.1);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.chart-zero {
+  stroke: rgba(243, 233, 214, 0.42);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  vector-effect: non-scaling-stroke;
+}
+
+.chart-tick {
+  fill: var(--ink-faint);
+  font-size: 8px;
+  font-family: var(--font);
+  text-anchor: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 12px;
+  margin: 0 0 10px;
+  font-size: 11px;
+  color: var(--ink-dim);
+}
+
+.legend-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.legend-swatch {
+  width: 14px;
+  height: 3px;
+  border-radius: 2px;
+  border: 1.5px solid transparent;
+}
+
+.legend-swatch.dashed {
+  border-style: dashed;
+  border-width: 0 0 2px 0;
+  height: 2px;
+  border-radius: 0;
+}
+
+/* Income / expense split */
+.breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 10px;
+}
+
+.breakdown-row {
+  display: grid;
+  grid-template-columns: 96px 1fr 58px;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+}
+
+.breakdown-key {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--ink-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.breakdown-key .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.breakdown-track {
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.07);
+  overflow: hidden;
+}
+
+.breakdown-fill {
+  height: 100%;
+  border-radius: 4px;
+}
+
+.breakdown-value {
+  text-align: right;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Surplus / deficit verdict */
+.verdict {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--panel-line);
+  background: var(--panel-raised);
+  margin-bottom: 10px;
+}
+
+.verdict.good {
+  border-color: rgba(127, 192, 106, 0.45);
+  background: linear-gradient(135deg, rgba(127, 192, 106, 0.16), var(--panel-raised));
+}
+
+.verdict.bad {
+  border-color: rgba(224, 112, 92, 0.5);
+  background: linear-gradient(135deg, rgba(224, 112, 92, 0.18), var(--panel-raised));
+}
+
+.verdict-figure {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  flex-wrap: wrap;
+  min-width: 96px;
+  font-variant-numeric: tabular-nums;
+}
+
+.verdict-sign,
+.verdict-value {
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.verdict.good .verdict-sign,
+.verdict.good .verdict-value {
+  color: var(--green);
+}
+
+.verdict.bad .verdict-sign,
+.verdict.bad .verdict-value {
+  color: var(--red);
+}
+
+.verdict-unit {
+  flex-basis: 100%;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.verdict-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.vital.tappable {
+  cursor: pointer;
+}
+
+.vital.tappable:active {
+  background: rgba(255, 255, 255, 0.09);
+}

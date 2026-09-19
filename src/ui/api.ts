@@ -9,6 +9,7 @@ export type SheetId =
   | 'research'
   | 'trade'
   | 'people'
+  | 'economy'
   | 'village'
   | 'building'
   | 'villager'

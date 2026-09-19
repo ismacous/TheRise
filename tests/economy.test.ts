@@ -55,16 +55,24 @@ describe('logistics', () => {
     expect(w.stockOf('logs')).toBeGreaterThan(before);
   });
 
-  it('never staffs more than a quarter of the village as porters', () => {
+  /**
+   * Staffing became the player's decision, so the old automatic cap of a
+   * quarter of the village on portering is gone: what has to hold now is that
+   * filling the depots still leaves the village hands to haul and to build,
+   * and that production gets staffed at all.
+   */
+  it('leaves hands free after the depots are filled', () => {
     const sim = createNewGame({ seed: 'porters' });
     const w = sim.world;
     placeNear(w, 'storehouse');
     placeNear(w, 'storehouse');
     placeNear(w, 'woodcutter_camp', 'tree', 15);
     run(sim, 60);
+
     const carriers = w.villagers.filter((v) => v.profession === 'carrier').length;
-    expect(carriers).toBeLessThanOrEqual(Math.max(1, Math.round(w.stats.adults * 0.25)) + 1);
-    // And the woodcutter camp must actually have staff.
+    expect(carriers).toBeLessThan(w.stats.adults);
+    // Unassigned adults are not idle: they are the haulers and the builders.
+    expect(w.stats.idle).toBeGreaterThan(0);
     const camp = w.buildingList.find((b) => b.def === 'woodcutter_camp')!;
     expect(camp.workers.length).toBeGreaterThan(0);
   });

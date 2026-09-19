@@ -191,7 +191,7 @@ export function updateObjectives(w: World): void {
     const [done, target] = o.progress(w);
     if (done < target) continue;
     w.completedObjectives.add(o.id);
-    w.treasury += o.reward.gold;
+    w.earn(o.reward.gold, 'gift');
     w.notify(
       `Objectif atteint : ${o.title} (+${o.reward.gold} pièces)`,
       '🏅',

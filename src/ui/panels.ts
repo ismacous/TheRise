@@ -53,10 +53,18 @@ import {
   universities,
   unlockedTier,
 } from '../sim/research';
-import { fullName } from '../sim/villagers';
+import { FOOD_EXODUS_DAYS, fullName } from '../sim/villagers';
 import type { Building, Villager } from '../sim/types';
 import type { GameApi, SheetId } from './api';
 import { bar, el, onTap } from './dom';
+import { breakdownBars, chartLegend, lineChart } from './charts';
+import {
+  EXPENSE_SOURCES,
+  INCOME_SOURCES,
+  LEDGER_COLORS,
+  LEDGER_LABELS,
+  type LedgerSource,
+} from '../sim/history';
 
 type Refresh = () => void;
 
@@ -79,6 +87,15 @@ export function sheetTitle(id: SheetId, api: GameApi): { title: string; sub?: st
         title: 'Villageois',
         sub: `${w.stats.population} habitants · ${w.stats.idle} sans emploi`,
       };
+    case 'economy': {
+      // The same figure the verdict shows, so the header can never contradict
+      // the big number right under it.
+      const net = w.history.liveIncome() - w.history.liveExpense();
+      return {
+        title: 'Économie',
+        sub: `${Math.round(w.treasury)} pièces · ${net >= 0 ? '+' : ''}${net.toFixed(0)} par jour`,
+      };
+    }
     case 'village':
       return { title: TIER_NAMES[w.stats.tier] ?? 'Village', sub: `Rang ${w.stats.tier} / 6` };
     case 'settings':
@@ -111,6 +128,8 @@ export function renderSheet(id: SheetId, api: GameApi, body: HTMLElement, refres
       return renderTrade(api, body, refresh);
     case 'people':
       return renderPeople(api, body, refresh);
+    case 'economy':
+      return renderEconomy(api, body, refresh);
     case 'village':
       return renderVillage(api, body, refresh);
     case 'building':
@@ -783,6 +802,228 @@ function miniBar(value: number, color: string): HTMLElement {
   return outer;
 }
 
+// ── Economy ────────────────────────────────────────────────────────────────
+
+/**
+ * The page that answers "where is my money going?". Everything on it reads the
+ * rolling history the simulation keeps, so it works identically whether the
+ * player opened it after two minutes or after two in-game years.
+ */
+function renderEconomy(api: GameApi, body: HTMLElement, refresh: Refresh): void {
+  const w = api.world;
+  const h = w.history;
+  const samples = h.samples;
+  const liveIncome = h.liveIncome();
+  const liveExpense = h.liveExpense();
+  const net = liveIncome - liveExpense;
+  const trend = h.netTrend();
+
+  // ── Verdict ──────────────────────────────────────────────────────────────
+  const surplus = net >= 0;
+  body.append(
+    el('div', { class: `verdict ${surplus ? 'good' : 'bad'}` }, [
+      el('div', { class: 'verdict-figure' }, [
+        el('span', { class: 'verdict-sign', text: surplus ? '+' : '−' }),
+        el('span', { class: 'verdict-value', text: formatNumber(Math.abs(net)) }),
+        el('span', { class: 'verdict-unit', text: 'pièces / jour' }),
+      ]),
+      el('div', { class: 'verdict-body' }, [
+        el('div', { class: 'card-title', text: surplus ? 'Excédent' : 'Déficit' }),
+        el('div', { class: 'card-desc', text: deficitHint(w, net, trend) }),
+      ]),
+    ]),
+  );
+
+  const kpis = el('div', { class: 'kpi-grid' });
+  for (const [k, v, sub] of [
+    ['Trésor', formatNumber(w.treasury), `tendance ${trend >= 0 ? '+' : ''}${formatNumber(trend)} / jour`],
+    ['Recettes', `${formatNumber(liveIncome)}`, 'pièces par jour'],
+    ['Dépenses', `${formatNumber(liveExpense)}`, 'pièces par jour'],
+    [
+      'Autonomie',
+      surplus ? '—' : `${Math.max(0, Math.floor(w.treasury / Math.max(1, -net)))} j`,
+      surplus ? 'la caisse monte' : 'avant la caisse vide',
+    ],
+  ] as Array<[string, string, string]>) {
+    kpis.append(
+      el('div', { class: 'kpi' }, [
+        el('div', { class: 'k', text: k }),
+        el('div', { class: 'v', text: v }),
+        el('div', { class: 's', text: sub }),
+      ]),
+    );
+  }
+  body.append(kpis);
+
+  const labels = xLabelsFor(samples.map((s) => s.day));
+
+  // ── Money in and out ─────────────────────────────────────────────────────
+  body.append(el('div', { class: 'section-title', text: 'Recettes et dépenses' }));
+  if (samples.length < 2) {
+    body.append(el('div', { class: 'empty-note', text: waitingNote() }));
+  } else {
+    body.append(
+      lineChart({
+        series: [
+          { label: 'Recettes', color: '#7fc06a', values: samples.map((s) => s.income), fill: true },
+          { label: 'Dépenses', color: '#e0705c', values: samples.map((s) => s.expense), dashed: true },
+        ],
+        include: [0],
+        xLabels: labels,
+        height: 130,
+        format: (v) => formatNumber(v),
+      }),
+      chartLegend([
+        { label: 'Recettes', color: '#7fc06a' },
+        { label: 'Dépenses', color: '#e0705c', dashed: true },
+      ]),
+    );
+
+    body.append(el('div', { class: 'section-title', text: 'Solde quotidien' }));
+    const balance = samples.map((s) => s.income - s.expense);
+    body.append(
+      lineChart({
+        series: [{ label: 'Solde', color: '#d9b45f', values: balance, fill: true }],
+        include: [0],
+        xLabels: labels,
+        height: 110,
+        zeroLine: true,
+        format: (v) => formatNumber(v),
+      }),
+    );
+
+    body.append(el('div', { class: 'section-title', text: 'Trésor' }));
+    body.append(
+      lineChart({
+        series: [{ label: 'Trésor', color: '#6fb0d4', values: samples.map((s) => s.treasury), fill: true }],
+        include: [0],
+        xLabels: labels,
+        height: 110,
+        format: (v) => formatNumber(v),
+      }),
+    );
+  }
+
+  // ── Where it comes from, where it goes ───────────────────────────────────
+  const incomeRows = ledgerRows(w, INCOME_SOURCES);
+  const expenseRows = ledgerRows(w, EXPENSE_SOURCES);
+  body.append(el('div', { class: 'section-title', text: "D'où vient l'or" }));
+  if (incomeRows.length === 0) {
+    body.append(el('div', { class: 'empty-note', text: 'Aucune recette pour le moment.' }));
+  } else {
+    body.append(breakdownBars(incomeRows, (v) => formatNumber(v)));
+  }
+  body.append(el('div', { class: 'section-title', text: 'Où il part' }));
+  if (expenseRows.length === 0) {
+    body.append(el('div', { class: 'empty-note', text: 'Vous n’avez encore rien dépensé.' }));
+  } else {
+    body.append(breakdownBars(expenseRows, (v) => formatNumber(v)));
+  }
+
+  // ── Happiness and population ─────────────────────────────────────────────
+  body.append(el('div', { class: 'section-title', text: 'Bonheur' }));
+  body.append(
+    el('div', { class: 'research-status' }, [
+      statChip('Bonheur', `${Math.round(w.stats.happiness)} %`),
+      statChip('Impôt', `${Math.round(w.taxRate * 100)} %`),
+      statChip('Humeur fiscale', `${taxHappiness(w) >= 0 ? '+' : ''}${Math.round(taxHappiness(w))}`),
+    ]),
+  );
+  if (samples.length < 2) {
+    body.append(el('div', { class: 'empty-note', text: waitingNote() }));
+  } else {
+    body.append(
+      lineChart({
+        series: [{ label: 'Bonheur', color: '#e8a94a', values: samples.map((s) => s.happiness), fill: true }],
+        include: [0, 100],
+        clamp: [0, 100],
+        xLabels: labels,
+        height: 110,
+        format: (v) => `${Math.round(v)}%`,
+      }),
+    );
+    body.append(el('div', { class: 'section-title', text: 'Population et vivres' }));
+    body.append(
+      lineChart({
+        series: [
+          { label: 'Habitants', color: '#6fb0d4', values: samples.map((s) => s.population), fill: true },
+          { label: 'Lits', color: '#8d8069', values: samples.map((s) => s.housing), dashed: true },
+        ],
+        include: [0],
+        clamp: [0, Infinity],
+        xLabels: labels,
+        height: 110,
+        format: (v) => formatNumber(v),
+      }),
+      chartLegend([
+        { label: 'Habitants', color: '#6fb0d4' },
+        { label: 'Lits', color: '#8d8069', dashed: true },
+      ]),
+    );
+    body.append(
+      lineChart({
+        series: [{ label: 'Vivres', color: '#7fc06a', values: samples.map((s) => s.foodDays), fill: true }],
+        include: [0],
+        clamp: [0, Infinity],
+        xLabels: labels,
+        height: 100,
+        format: (v) => `${Math.round(v)} j`,
+      }),
+    );
+    body.append(
+      el('div', {
+        class: 'card-desc',
+        text: `Sous ${FOOD_EXODUS_DAYS.toLocaleString('fr-FR')} jour de vivres, les villageois commencent à quitter le village : c'est la soupape qui évite la famine générale.`,
+      }),
+    );
+  }
+
+  const hall = el('button', { class: 'btn', text: "Régler l'impôt" });
+  onTap(hall, () => {
+    const townHall = w.buildingList.find((b) => b.def === 'town_hall');
+    if (!townHall) return;
+    api.selectBuilding(townHall.id);
+  });
+  body.append(el('div', { class: 'btn-row' }, [hall]));
+  void refresh;
+}
+
+function waitingNote(): string {
+  return "Les courbes se remplissent d'un point toutes les demi-journées. Revenez dans quelques minutes de jeu.";
+}
+
+function ledgerRows(w: GameApi['world'], sources: LedgerSource[]): Array<{ label: string; value: number; color: string }> {
+  return sources
+    .map((s) => ({ label: LEDGER_LABELS[s], value: w.history.total[s], color: LEDGER_COLORS[s] }))
+    .filter((r) => r.value > 0.5)
+    .sort((a, b) => b.value - a.value);
+}
+
+/** Turns the first, middle and last sample day into readable axis labels. */
+function xLabelsFor(days: number[]): [string, string, string] {
+  if (days.length === 0) return ['', '', ''];
+  const first = days[0];
+  const last = days[days.length - 1];
+  const mid = days[Math.floor((days.length - 1) / 2)];
+  const fmt = (d: number): string => `j${Math.floor(d)}`;
+  return [fmt(first), fmt(mid), fmt(last)];
+}
+
+function deficitHint(w: GameApi['world'], net: number, trend: number): string {
+  if (net >= 0) {
+    if (w.research.active) return "Les études consomment déjà une partie de ce surplus : gardez-les en file d'attente.";
+    return "Rien à l'étude en ce moment : lancez une recherche, c'est à ça que sert le trésor.";
+  }
+  const days = Math.floor(w.treasury / Math.max(1, -net));
+  if (days < 3) {
+    return `La caisse sera vide dans ${days} jour(s). Montez l'impôt à l'hôtel de ville, ou vendez au comptoir.`;
+  }
+  if (trend < 0 && w.taxRate < 0.5) {
+    return `L'impôt est à ${Math.round(w.taxRate * 100)} % : le remonter d'un cran rééquilibre le budget sans vider le village.`;
+  }
+  return "Un déficit se rattrape en vendant : le comptoir de commerce paie bien les biens transformés.";
+}
+
 // ── Village overview ───────────────────────────────────────────────────────
 
 function renderVillage(api: GameApi, body: HTMLElement, refresh: Refresh): void {
@@ -896,9 +1137,11 @@ function renderVillage(api: GameApi, body: HTMLElement, refresh: Refresh): void 
     );
   }
 
-  const settings = el('button', { class: 'btn', text: '⚙️ Options et sauvegarde' });
+  const economy = el('button', { class: 'btn primary', text: 'Économie et courbes' });
+  onTap(economy, () => api.openSheet('economy'));
+  const settings = el('button', { class: 'btn', text: 'Options et sauvegarde' });
   onTap(settings, () => api.openSheet('settings'));
-  body.append(el('div', { class: 'btn-row' }, [settings]));
+  body.append(el('div', { class: 'btn-row' }, [economy, settings]));
   void refresh;
 }
 

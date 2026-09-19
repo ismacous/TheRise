@@ -53,9 +53,22 @@ const PRIMARY_GOODS: GoodId[] = [
 
 /** Sheets whose contents change while they are open. */
 /** Sheets rendered as a full page rather than a bottom drawer. */
-const FULL_SHEETS = new Set<SheetId>(['research']);
+const FULL_SHEETS = new Set<SheetId>(['research', 'economy']);
 
-const LIVE_SHEETS = new Set<SheetId>(['research', 'trade', 'building', 'village', 'people', 'villager']);
+const LIVE_SHEETS = new Set<SheetId>([
+  'research',
+  'trade',
+  'building',
+  'village',
+  'people',
+  'villager',
+]);
+
+/**
+ * The economy page is a wall of SVG. Rebuilding it twice a second would burn
+ * frames for nothing — its curves only gain a point every half in-game day.
+ */
+const SLOW_LIVE_SHEETS = new Set<SheetId>(['economy']);
 
 const DOCK: Array<{ id: SheetId; icon: string; label: string }> = [
   { id: 'build', icon: '🔨', label: 'Bâtir' },
@@ -91,6 +104,7 @@ export class UiShell {
   private refreshTimer = 0;
   private sheetDirty = true;
   private liveTimer = 0;
+  private slowLiveTimer = 0;
 
   constructor(root: HTMLElement, api: GameApi) {
     this.root = root;
@@ -116,6 +130,12 @@ export class UiShell {
         el('span', { class: 'ic', text: icon }),
         value,
       ]);
+      // Money and morale are the two numbers the economy page explains, so
+      // tapping them is the shortest route to the curves.
+      if (key === 'gold' || key === 'happy') {
+        node.classList.add('tappable');
+        onTap(node, () => this.api.openSheet('economy'));
+      }
       this.vitalNodes.set(key, value);
       this.vitals.append(node);
     }
@@ -216,7 +236,15 @@ export class UiShell {
     this.liveTimer -= dt;
     if (this.liveTimer <= 0) {
       this.liveTimer = 0.5;
-      if (this.api.openSheetId && LIVE_SHEETS.has(this.api.openSheetId)) this.sheetDirty = true;
+      const open = this.api.openSheetId;
+      if (open && LIVE_SHEETS.has(open)) this.sheetDirty = true;
+      if (open && SLOW_LIVE_SHEETS.has(open)) {
+        this.slowLiveTimer -= 0.5;
+        if (this.slowLiveTimer <= 0) {
+          this.slowLiveTimer = 3;
+          this.sheetDirty = true;
+        }
+      }
     }
     if (this.sheetDirty) {
       this.sheetDirty = false;

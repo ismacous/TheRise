@@ -280,7 +280,7 @@ function startWanderingFamily(world: World): void {
 
 function startMerchantVisit(world: World): void {
   const bonus = Math.round(20 + world.stats.population * 1.4);
-  world.treasury += bonus;
+  world.earn(bonus, 'gift');
   world.pushEvent({
     kind: 'merchant_visit',
     title: 'Colporteur de passage',

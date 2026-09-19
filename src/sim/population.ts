@@ -3,6 +3,9 @@ import { BUILDINGS } from '../data/buildings';
 import { COMFORT_GOODS, GOODS } from '../data/goods';
 import {
   ADULT_AGE,
+  FOOD_BIRTH_DAYS,
+  FOOD_EXODUS_DAYS,
+  FOOD_IMMIGRATION_DAYS,
   OLD_AGE,
   canWork,
   createVillager,
@@ -109,7 +112,7 @@ export function updateHouseholdConsumption(world: World, dt: number): void {
     b.inv.ale = ale - used;
     if (b.inv.ale! <= 0.001) delete b.inv.ale;
     world.comfortPool += used * 1.8;
-    world.treasury += used * 2.2;
+    world.earn(used * 2.2, 'tavern');
   }
 
   world.comfortPool = Math.max(0, world.comfortPool - dt * 0.35);
@@ -137,18 +140,30 @@ export function updateVillagerNeeds(world: World, v: Villager, dt: number): void
   const target = v.happinessTarget + Math.min(14, world.comfortPool * 0.35);
   v.happiness = damp(v.happiness, clamp(target, 0, 100), 0.35, dt);
 
-  // Health: starvation and sickness wear people down; rest and food restore.
-  if (v.sick > 0) {
-    v.sick = Math.max(0, v.sick - dt * (0.004 / world.modifiers.diseaseResist));
-    v.health = Math.max(0, v.health - dt * 0.5);
-  } else if (v.satiety <= 0) {
-    // Starvation is slow on purpose: a week of empty larders before anyone
-    // dies leaves the player time to react. This is a chill game.
+  // Health. Starvation is the only thing that can empty the gauge.
+  if (v.satiety <= 0) {
+    // Slow on purpose: a week of empty larders before anyone dies leaves the
+    // player time to react. This is a chill game.
     v.health = Math.max(0, v.health - dt * 0.22);
-  } else if (v.satiety > 55) {
+  } else if (v.satiety > 55 && v.sick <= 0) {
     v.health = Math.min(100, v.health + dt * 0.8);
   }
+  if (v.sick > 0) {
+    // A fever runs its course in about four minutes, half that once herbalism
+    // is studied, and wears its patient down to SICK_HEALTH_FLOOR and no
+    // further. Letting it drain to zero made a single outbreak a village-wide
+    // culling — and two outbreaks in a row unsurvivable however well fed the
+    // village was. A fever on top of an empty belly still kills, because
+    // starvation above keeps biting past the floor.
+    v.sick = Math.max(0, v.sick - dt * (0.004 / world.modifiers.diseaseResist));
+    if (v.health > SICK_HEALTH_FLOOR) {
+      v.health = Math.max(SICK_HEALTH_FLOOR, v.health - dt * 0.2);
+    }
+  }
 }
+
+/** Health a fever alone will never take a villager below. */
+const SICK_HEALTH_FLOOR = 30;
 
 export interface PopulationOutcome {
   births: number;
@@ -168,7 +183,9 @@ export function updatePopulation(world: World, dt: number): PopulationOutcome {
     let dieChance = 0;
     if (v.health <= 0) dieChance = 1;
     else if (v.age > OLD_AGE) dieChance = (v.age - OLD_AGE) * 0.00002 * dt;
-    if (v.sick > 0.7) dieChance += 0.00004 * dt * (1 / world.modifiers.diseaseResist);
+    // diseaseResist is a severity multiplier: below one means milder, so it
+    // multiplies the risk rather than dividing it.
+    if (v.sick > 0.7) dieChance += 0.00004 * dt * world.modifiers.diseaseResist;
     if (dieChance > 0 && world.rng.next() < dieChance) {
       removeVillager(world, v, v.health <= 0 ? (v.satiety <= 0 ? 'faim' : 'maladie') : 'vieillesse');
       deaths++;
@@ -193,7 +210,7 @@ export function updatePopulation(world: World, dt: number): PopulationOutcome {
       v.age <= 42 &&
       v.homeId !== 0 &&
       pop + 1 <= cap &&
-      world.stats.foodDays > 5 &&
+      world.stats.foodDays > FOOD_BIRTH_DAYS &&
       v.happiness > 45 &&
       v.satiety > 45
     ) {
@@ -242,12 +259,16 @@ export function removeVillager(world: World, v: Villager, cause: string): void {
 export function updateEmigration(world: World, dt: number): void {
   const s = world.stats;
   if (world.villagers.length <= 3) return;
-  const desperate = s.foodDays < 1.5 || s.happiness < 22;
+  const desperate = s.foodDays < FOOD_EXODUS_DAYS || s.happiness < 22;
   if (!desperate) return;
 
   for (let i = world.villagers.length - 1; i >= 0; i--) {
     const v = world.villagers[i];
     if (v.profession === 'child') continue;
+    // Nobody packs up and walks out of the valley with a fever. Without this
+    // an outbreak drove people away precisely because it had made them
+    // miserable, which turned every epidemic into an exodus.
+    if (v.sick > 0) continue;
     if (v.happiness > 30 && v.satiety > 25) continue;
     const p = 0.0016 * dt * (1 + (30 - Math.min(30, v.happiness)) / 30);
     if (world.rng.next() >= p) continue;
@@ -263,7 +284,7 @@ export function updateEmigration(world: World, dt: number): void {
 export function updateImmigration(world: World, dt: number): void {
   const s = world.stats;
   if (s.housingCapacity - s.population < 2) return;
-  if (s.happiness < 48 || s.foodDays < 6) return;
+  if (s.happiness < 48 || s.foodDays < FOOD_IMMIGRATION_DAYS) return;
   const attractiveness = clamp((s.happiness - 40) / 30, 0, 1.6) * (1 + (s.tier - 1) * 0.2);
   const p = 0.012 * dt * attractiveness;
   if (world.rng.next() >= p) return;
@@ -273,7 +294,8 @@ export function updateImmigration(world: World, dt: number): void {
   const ey = hall ? hall.cy : world.startY;
   const group = world.rng.int(1, 3);
   for (let i = 0; i < group; i++) {
-    createVillager(world, ex + world.rng.range(-2, 2), ey + world.rng.range(-2, 2), world.rng.range(16, 34));
+    // Young adults, not pensioners: see the note on the founding cohort.
+    createVillager(world, ex + world.rng.range(-2, 2), ey + world.rng.range(-2, 2), world.rng.range(5, 18));
   }
   world.notify(
     group === 1 ? 'Un voyageur s’installe au village' : `${group} nouveaux venus s’installent`,

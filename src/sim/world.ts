@@ -10,6 +10,8 @@ import { computeModifiers, type Modifiers } from './modifiers';
 import { housingCapacity, serviceRadius, storageCapacity, upgradeTargetOf, workerSlots } from './levels';
 import { createPartnerRuntime, type PartnerRuntime } from './economy';
 import { TRADE_PARTNERS } from '../data/trade';
+import { DAWN, DUSK } from './clock';
+import { History, type LedgerSource } from './history';
 import { TileMap } from './tilemap';
 import {
   SEASONS,
@@ -27,13 +29,8 @@ import {
   type WeatherKind,
 } from './types';
 
-/** Twelve real minutes per in-game day at normal speed. */
-export const DAY_SECONDS = 720;
-export const DAYS_PER_SEASON = 3;
-
-/** Start and end of daylight, as a fraction of the day: 70 % day, 30 % night. */
-export const DAWN = 0.15;
-export const DUSK = 0.85;
+// Re-exported so every existing `from './world'` import keeps working.
+export { DAWN, DAY_SECONDS, DAYS_PER_SEASON, DUSK } from './clock';
 
 export interface WorldEvents {
   notify: Notification;
@@ -88,6 +85,8 @@ export class World {
   modifiers: Modifiers = computeModifiers([]);
 
   treasury = 120;
+  /** Every coin in and out, tagged by source, plus the rolling curves. */
+  history = new History();
   contracts: TradeContract[] = [];
   activeEvents: ActiveEvent[] = [];
   notifications: Notification[] = [];
@@ -206,6 +205,20 @@ export class World {
     return this.nextEventId++;
   }
 
+  /** Credits the treasury and books the coins against a source. */
+  earn(amount: number, source: LedgerSource): void {
+    if (!(amount > 0)) return;
+    this.treasury += amount;
+    this.history.record(source, amount);
+  }
+
+  /** Debits the treasury and books the coins against a source. */
+  spend(amount: number, source: LedgerSource): void {
+    if (!(amount > 0)) return;
+    this.treasury -= amount;
+    this.history.record(source, amount);
+  }
+
   rebuildNodeGrid(): void {
     this.nodeGrid.rebuild(
       (function* (map: Map<number, ResourceNode>) {
@@ -299,7 +312,7 @@ export class World {
     if (!check.ok) return null;
     const def = BUILDINGS[defId];
     if (this.treasury < def.goldCost) return null;
-    this.treasury -= def.goldCost;
+    this.spend(def.goldCost, 'build');
 
     const [w, h] = this.footprint(defId, rotation);
 
@@ -393,7 +406,7 @@ export class World {
       for (const [g, amt] of Object.entries(b.inv)) {
         this.addToStock(g as GoodId, amt as number);
       }
-      this.treasury += Math.floor(def.goldCost * 0.4);
+      this.earn(Math.floor(def.goldCost * 0.4), 'gift');
     }
     this.map.setOccupancy(b.x, b.y, b.w, b.h, -1);
     this.terrainChanges.push({ x: b.x, y: b.y, w: b.w, h: b.h });
@@ -443,7 +456,7 @@ export class World {
     if (!b) return false;
     if (!this.canUpgrade(b).ok) return false;
     const target = upgradeTargetOf(b)!;
-    this.treasury -= target.goldCost;
+    this.spend(target.goldCost, 'upgrade');
     for (const [g, amount] of Object.entries(target.cost)) {
       this.takeFromStock(g as GoodId, amount as number);
     }

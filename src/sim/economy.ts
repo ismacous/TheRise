@@ -99,7 +99,7 @@ export function orderBuy(world: World, partnerId: string, good: GoodId, amount: 
   const total = unit * qty;
   if (world.treasury < total) return { ok: false, reason: "Pas assez d'or" };
 
-  world.treasury -= total;
+  world.spend(total, 'purchase');
   rt.stock[good] = available - qty;
   const c: TradeContract = {
     id: nextContractId++,
@@ -160,7 +160,7 @@ export function updateEconomy(world: World, dt: number): void {
       const leftover = world.addToStock(c.good, c.amount);
       if (leftover > 0) {
         // No room left: the goods are sold back at a loss rather than vanishing.
-        world.treasury += leftover * c.unitPrice * 0.5;
+        world.earn(leftover * c.unitPrice * 0.5, 'trade');
         world.notify(
           `Entrepôts pleins : ${leftover} ${GOODS[c.good].name} revendus à perte`,
           '⚠️',
@@ -170,7 +170,7 @@ export function updateEconomy(world: World, dt: number): void {
       world.notify(`${c.amount} ${GOODS[c.good].name} livrés par ${p.name}`, '📦', 'good');
     } else {
       const income = c.amount * c.unitPrice;
-      world.treasury += income;
+      world.earn(income, 'trade');
       world.tradeIncomeWindow += income;
       world.notify(
         `${p.name} paie ${Math.round(income)} pièces pour ${c.amount} ${GOODS[c.good].name}`,
@@ -201,7 +201,7 @@ export function updateEconomy(world: World, dt: number): void {
   // scaled by prestige. This is what pays for research, so the whole tree is
   // balanced against it.
   const taxes = taxIncome(world) * dt;
-  world.treasury += taxes;
+  world.earn(taxes, 'tax');
   world.taxIncomeWindow += taxes;
 }
 

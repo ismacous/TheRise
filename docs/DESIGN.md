@@ -155,20 +155,42 @@ inactif ──► récolte ──► marche vers le nœud ──► travail ─�
 
 Deux garde-fous évitent les blocages observés en test :
 
-- **Quota de porteurs.** Au plus 25 % des adultes peuvent être porteurs. Sans
-  cela, les entrepôts absorbaient tout le monde et rien n'était produit.
-- **Redéploiement.** Si un poste important est vide et que personne n'est
-  disponible, un villageois est retiré du poste le moins utile.
+- **Affectation manuelle.** Le joueur décide qui travaille où. L'ancien quota
+  automatique de porteurs (25 % des adultes) n'existe plus : les entrepôts
+  n'ont que le nombre de postes qu'ils offrent, et les adultes non affectés
+  sont précisément ceux qui bâtissent et transportent.
 - **Soupape d'auto-portage.** Un récolteur dont le camp est plein à 60 % porte
   lui-même une charge à l'entrepôt.
 
 ### Démographie
 
-- Adulte à 14 jours de jeu, vieillesse à partir de 62.
+- Adulte à 4 jours de jeu, vieillesse à partir de 26. Le village est fondé par
+  des jeunes adultes (6 à 16 jours) : le peupler de trentenaires revenait à
+  enterrer un tiers des colons dans la première demi-heure.
 - Une mère potentielle (18-42 ans, logée, bonheur > 45) a environ un enfant tous
   les huit jours au meilleur moral, et quasiment aucun s'il n'y a plus de lits.
+- Les enfants mangent comme tout le monde. Leur boucle de comportement sautait
+  autrefois la règle « va manger » : aucun enfant né au village n'atteignait
+  l'âge adulte, et seule l'immigration faisait croître la population.
 - L'immigration dépend du bonheur et du rang du village, et s'arrête net si les
-  logements sont pleins ou si les vivres passent sous six jours.
+  logements sont pleins ou si les vivres passent sous le seuil ci-dessous.
+
+### Les seuils de vivres
+
+Ils vivent tous dans `src/sim/villagers.ts` et nulle part ailleurs :
+
+| Seuil | Jours de vivres | Effet |
+|---|---|---|
+| `FOOD_EXODUS_DAYS` | 0,75 | En dessous, les villageois commencent à partir |
+| `FOOD_BIRTH_DAYS` | 1,5 | Au-dessus, les naissances redeviennent possibles |
+| `FOOD_IMMIGRATION_DAYS` | 2 | Au-dessus, de nouveaux venus s'installent |
+
+La faim se compte par seconde réelle, pas par journée de jeu — comme la
+production. Allonger la journée de 2 à 12 minutes a donc multiplié par six la
+quantité que représente « un jour de vivres », sans toucher à ces seuils :
+un village neuf naissait sous la ligne d'exode et ne pouvait que se vider. Un
+test (`tests/population.test.ts`) vérifie désormais qu'une partie où le joueur
+ne fait rien pendant vingt minutes ne perd personne.
 
 ---
 
@@ -217,6 +239,12 @@ nourriture et toute la palette de couleurs.
 |---|---|---|
 | Incendie | Le bâtiment brûle et peut se propager aux voisins | Puits, tour de guet, espacer les ateliers à risque |
 | Épidémie | Une part des villageois est alitée | Maison de l'herboriste |
+
+Une fièvre use son malade jusqu'à 30 points de santé et pas plus bas : elle ne
+tue jamais à elle seule, et personne ne quitte le village en étant alité. Seule
+la faim peut vider la jauge — une épidémie sur un ventre vide reste mortelle.
+Avant correction, la maladie retirait un demi-point de santé par seconde pour
+une guérison en quatre minutes : chaque malade mourait sans exception.
 | Pluie bienfaisante | Croissance accélérée, moral en baisse | — |
 | Récolte exceptionnelle | Une moisson offerte | — |
 | Famille sur les routes | Nouveaux habitants | Avoir des lits libres |
@@ -266,10 +294,11 @@ d'urgence coûteux en temps plutôt qu'interdit.
 
 | Grandeur | Valeur |
 |---|---|
-| Journée | 120 s |
-| Consommation | 40 points de satiété par villageois et par jour |
+| Journée | 720 s (12 minutes) |
+| Consommation | 0,26 point de satiété par villageois et par **seconde** |
 | Conversion | 1 nutrition = 22 points de satiété |
-| Besoin réel | ≈ 1,8 nutrition par villageois et par jour |
+| Besoin réel | ≈ 8,5 nutrition par villageois et par jour |
+| Larder de départ | 165 unités, soit ≈ 3 jours pour les dix fondateurs |
 | Pain | 3 nutrition (soit ~1,7 jour pour une personne) |
 | Camp de bûcherons | 7 rondins toutes les ~15 unités de travail, 2 ouvriers |
 | Scierie | 2 rondins → 3 planches |

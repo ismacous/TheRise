@@ -17,7 +17,7 @@ import {
 import { housingCapacity } from './levels';
 import { updateObjectives } from './objectives';
 import { updateResearch } from './research';
-import { NUTRITION_PER_DAY, countFoodVariety, createVillager } from './villagers';
+import { NUTRITION_PER_DAY, countFoodVariety, createVillager, rescueIfTrapped } from './villagers';
 import { DAYS_PER_SEASON, DAY_SECONDS, World } from './world';
 import { SEASONS, type Season } from './types';
 import type { WorldGenOptions } from './worldgen';
@@ -94,6 +94,7 @@ export class Simulation {
       v.prevX = v.x;
       v.prevY = v.y;
       v.prevAngle = v.angle;
+      rescueIfTrapped(w, v);
       updateVillagerNeeds(w, v, dt);
       updateVillager(w, v, dt);
     }
@@ -125,6 +126,10 @@ export class Simulation {
         }
       }
     }
+
+    // Rolling curves for the economy page. Sampled after the stats pass so a
+    // point never records a population the village no longer has.
+    w.history.update(w, dt);
 
     this.incomeTimer -= dt;
     if (this.incomeTimer <= 0) {
@@ -233,9 +238,13 @@ export function createNewGame(opts: NewGameOptions = {}): Simulation {
   const hallY = hall ? hall.cy : sy;
 
   placeNear(w, 'storehouse', hallX + 5, hallY, true);
-  // Two salvaged shelters: enough to start, nowhere near enough to grow.
+  // Three salvaged shelters: a bed for almost everyone, nowhere near enough to
+  // grow. Starting with fewer beds than settlers put a quarter of the village
+  // on a permanent homelessness penalty, which alone kept morale under the
+  // threshold for births and newcomers.
   placeNear(w, 'shack', hallX - 5, hallY + 3, true);
   placeNear(w, 'shack', hallX - 5, hallY - 3, true);
+  placeNear(w, 'shack', hallX - 6, hallY, true);
 
   // The abandoned village the player has come to rebuild.
   scatterRuins(w, hallX, hallY);
@@ -244,8 +253,10 @@ export function createNewGame(opts: NewGameOptions = {}): Simulation {
   w.addToStock('logs', 70 + Math.min(40, salvagedLogs));
   w.addToStock('planks', 24);
   w.addToStock('stone', 24);
-  w.addToStock('berries', 70);
-  w.addToStock('bread', 30);
+  // Roughly three days of food for the founding ten. Enough to get a gatherer
+  // hut standing without the first minutes being a race against starvation.
+  w.addToStock('berries', 120);
+  w.addToStock('bread', 45);
   w.refreshStockCache();
 
   const count = opts.startingVillagers ?? 8;
@@ -253,7 +264,10 @@ export function createNewGame(opts: NewGameOptions = {}): Simulation {
     const a = (i / count) * Math.PI * 2;
     const x = clamp(hallX + Math.cos(a) * 4, 2, w.map.width - 3);
     const y = clamp(hallY + Math.sin(a) * 4, 2, w.map.height - 3);
-    createVillager(w, x, y, w.rng.range(18, 40), i % 2 === 0);
+    // Ages are in game days: adulthood at 4, old age at 26. Founding the
+    // village with 18-to-40-year-olds meant a third of the settlers were
+    // already past working age and died within the first half hour.
+    createVillager(w, x, y, w.rng.range(6, 16), i % 2 === 0);
   }
   // A couple of children so the village reads as alive from the first frame.
   for (let i = 0; i < 2; i++) {
@@ -261,6 +275,8 @@ export function createNewGame(opts: NewGameOptions = {}): Simulation {
   }
 
   computeStats(w);
+  // A first point so the economy page has something to draw from minute one.
+  w.history.push(w);
   w.notify('Le village vous attend. Commencez par le bois.', '🪵', 'neutral', hallX, hallY);
   return sim;
 }

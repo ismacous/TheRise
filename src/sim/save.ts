@@ -5,15 +5,17 @@ import type { GoodId } from '../data/goods';
 import type { Building, ResourceNode, Villager } from './types';
 import type { WorldGenOptions } from './worldgen';
 import { createPartnerRuntime } from './economy';
+import { History } from './history';
 import { TRADE_PARTNERS } from '../data/trade';
 
 /**
- * Bumped to 4 because version 3 snapshots could contain fractional building
- * origins, written before the spatial-index bug was fixed. Loading one would
- * revive a village whose farms can never produce.
+ * Bumped to 6 with the economy rework: snapshots now carry the ledger and the
+ * rolling curves, and the food thresholds they were balanced against changed.
+ * A version 5 village would load with a founding cohort already past working
+ * age and a larder sized for the old two-minute day.
  */
-export const SAVE_VERSION = 5;
-export const SAVE_KEY = 'therise.save.v5';
+export const SAVE_VERSION = 6;
+export const SAVE_KEY = 'therise.save.v6';
 
 interface NodeDiff {
   /** Ids present in the freshly generated world that no longer exist. */
@@ -32,6 +34,7 @@ export interface SaveData {
   weather: string;
   weatherTimer: number;
   treasury: number;
+  history: ReturnType<History['toJSON']>;
   taxRate: number;
   comfortPool: number;
   eventCooldown: number;
@@ -87,6 +90,7 @@ export function serialize(sim: Simulation, gen: Partial<WorldGenOptions>): SaveD
     weather: w.weather,
     weatherTimer: w.weatherTimer,
     treasury: w.treasury,
+    history: w.history.toJSON(),
     taxRate: w.taxRate,
     comfortPool: w.comfortPool,
     eventCooldown: w.eventCooldown,
@@ -199,6 +203,7 @@ export function deserialize(data: SaveData): Simulation {
   w.weather = data.weather as never;
   w.weatherTimer = data.weatherTimer;
   w.treasury = data.treasury;
+  w.history = History.fromJSON(data.history);
   w.taxRate = data.taxRate ?? 0.5;
   w.comfortPool = data.comfortPool ?? 0;
   w.eventCooldown = data.eventCooldown ?? 200;

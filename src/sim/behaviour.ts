@@ -39,7 +39,10 @@ export function updateVillager(world: World, v: Villager, dt: number): void {
   }
 
   // A destination that cannot be reached must never hold a villager hostage.
-  if (isStuck(v) && v.task.kind !== 'none' && v.task.kind !== 'wander') {
+  // Eating is the exception: dropping the task here only made the survival
+  // override below re-issue it against the same unreachable larder, forever.
+  // `doEat` abandons it too, but remembers which larder to skip.
+  if (isStuck(v) && v.task.kind !== 'none' && v.task.kind !== 'wander' && v.task.kind !== 'eat') {
     abandonTask(world, v);
     return;
   }
@@ -103,6 +106,18 @@ function abandonTask(world: World, v: Villager): void {
 }
 
 function updateChild(world: World, v: Villager, dt: number): void {
+  // Children eat too. They used to play until they starved: this branch
+  // returned before the survival override, so every child born in the village
+  // was dead within a quarter of an hour and only immigration ever grew the
+  // population. A test now keeps a newborn alive to adulthood.
+  if (v.task.kind === 'eat' || v.satiety < 40) {
+    if (v.task.kind !== 'eat') {
+      clearTask(v);
+      v.task = { kind: 'eat', phase: 0 };
+    }
+    doEat(world, v, dt);
+    return;
+  }
   v.state = 'relaxing';
   if (v.task.kind !== 'wander') {
     const t = wanderTarget(world, v, world.rng);
@@ -577,7 +592,7 @@ function doBuild(world: World, v: Villager, dt: number): void {
 
 function doEat(world: World, v: Villager, dt: number): void {
   if (v.task.phase === 0) {
-    const source = findFoodSource(world, v);
+    const source = findFoodSource(world, v, v.task.fromId);
     if (!source) {
       v.state = 'idle';
       // Starvation is handled by the population system; keep wandering meanwhile.
@@ -593,6 +608,16 @@ function doEat(world: World, v: Villager, dt: number): void {
   const b = world.buildings.get(v.task.targetId!);
   if (!b) {
     clearTask(v);
+    return;
+  }
+  // Without this watchdog a villager whose larder turned out to be unreachable
+  // walked at a wall until it starved, with the storehouses full. Every other
+  // task had an escape; eating — the one that kills — did not.
+  if (isStuck(v)) {
+    b.stall = 'Accès bloqué';
+    const blocked = b.id;
+    clearTask(v);
+    v.task = { kind: 'eat', phase: 0, fromId: blocked };
     return;
   }
   v.state = 'walking';
@@ -611,11 +636,12 @@ function doEat(world: World, v: Villager, dt: number): void {
   }
 }
 
-function findFoodSource(world: World, v: Villager): Building | null {
+/** `avoidId` skips a larder this villager has just failed to reach. */
+function findFoodSource(world: World, v: Villager, avoidId?: number): Building | null {
   let best: Building | null = null;
   let bestD = Infinity;
   for (const b of world.buildingList) {
-    if (b.state !== 'active') continue;
+    if (b.state !== 'active' || b.id === avoidId) continue;
     const def = BUILDINGS[b.def];
     const isMarket = def.service?.kind === 'market';
     const isStore = def.storage?.global;

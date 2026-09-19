@@ -100,7 +100,7 @@ export function startResearch(world: World, id: ResearchId): boolean {
     world.research.queue.push(id);
     return true;
   }
-  world.treasury -= RESEARCH[id].cost;
+  world.spend(RESEARCH[id].cost, 'research');
   world.research.active = id;
   world.research.progress = 0;
   return true;
@@ -117,7 +117,7 @@ export function cancelResearch(world: World): void {
   // Refund the unspent share so cancelling is never a trap.
   const def = RESEARCH[active];
   const remaining = 1 - world.research.progress / def.duration;
-  world.treasury += def.cost * remaining * CANCEL_REFUND;
+  world.earn(def.cost * remaining * CANCEL_REFUND, 'gift');
   world.research.active = null;
   world.research.progress = 0;
 }
@@ -138,7 +138,7 @@ export function updateResearch(world: World, dt: number): void {
       }
       if (canStartResearch(world, id).ok) {
         world.research.queue.splice(i, 1);
-        world.treasury -= RESEARCH[id].cost;
+        world.spend(RESEARCH[id].cost, 'research');
         world.research.active = id;
         world.research.progress = 0;
         break;
