@@ -3,8 +3,14 @@ import type { World } from '../sim/world';
 import { BUILDINGS } from '../data/buildings';
 import type { GameApi } from './api';
 import { el, onTap } from './dom';
+import { icon } from './icons';
 
-const SIZE = 132;
+/**
+ * Drawing units for the map. The canvas is backed at twice this and stretched
+ * to whatever the window allows, so the map is as big as the phone can show
+ * without any of the arithmetic below caring.
+ */
+const SIZE = 256;
 
 const TERRAIN_COLORS: Record<number, [number, number, number]> = {
   [TERRAIN.GRASS]: [104, 148, 72],
@@ -19,6 +25,13 @@ const TERRAIN_COLORS: Record<number, [number, number, number]> = {
  * A downsampled top-down view of the valley with the camera frustum, the
  * player's buildings and any fire. Tapping it flies the camera there, which is
  * the only sane way to cross a 208x208 map on a phone.
+ *
+ * It used to live in the corner of the screen, permanently. That was wrong
+ * three times over: it covered the valley whether or not anyone wanted it, it
+ * overflowed the little plinth it sat on, and folding it away only slid it
+ * down far enough to still be in the way. So it is a button now, and the
+ * button opens a map — one thing, in the middle of the screen, as big as the
+ * screen allows, and gone again when you are done with it.
  */
 export class Minimap {
   readonly root: HTMLElement;
@@ -29,7 +42,8 @@ export class Minimap {
   private scale: number;
   private terrainDirty = true;
   private lastSeason = '';
-  private collapsed = false;
+  private overlay: HTMLElement;
+  private open_ = false;
 
   constructor(api: GameApi) {
     this.api = api;
@@ -47,14 +61,32 @@ export class Minimap {
     this.terrainCanvas.width = w.map.width;
     this.terrainCanvas.height = w.map.height;
 
-    const toggle = el('button', { class: 'minimap-toggle', text: '▾', 'aria-label': 'Replier la carte' });
-    onTap(toggle, () => {
-      this.collapsed = !this.collapsed;
-      this.root.classList.toggle('collapsed', this.collapsed);
-      toggle.textContent = this.collapsed ? '▴' : '▾';
-    });
+    this.root = el('button', { class: 'map-button', 'aria-label': 'Carte de la vallée' }, [
+      icon('map', 'ic'),
+    ]);
+    onTap(this.root, () => this.open());
 
-    this.root = el('div', { class: 'minimap' }, [this.canvas, toggle]);
+    const close = el('button', { class: 'sheet-close', 'aria-label': 'Fermer' }, [icon('close')]);
+    onTap(close, () => this.close());
+
+    this.overlay = el('div', { class: 'map-overlay' }, [
+      el('div', { class: 'map-panel' }, [
+        el('div', { class: 'map-head' }, [el('h2', { text: 'La vallée' }), close]),
+        this.canvas,
+        el('div', { class: 'map-legend' }, [
+          legendItem('#f0e2c2', 'Foyers'),
+          legendItem('#d9b45f', 'Dépôts'),
+          legendItem('#e6d3a8', 'Ateliers'),
+          legendItem('#c9a56b', 'Chantiers'),
+          legendItem('#ff6a32', 'Incendie'),
+        ]),
+        el('div', { class: 'card-desc', text: 'Touchez la carte pour y emmener la caméra.' }),
+      ]),
+    ]);
+    // Tapping the backdrop closes, the panel itself does not.
+    this.overlay.addEventListener('pointerdown', (e) => {
+      if (e.target === this.overlay) this.close();
+    });
 
     // Tapping jumps the camera; dragging scrubs across the valley.
     let dragging = false;
@@ -79,6 +111,32 @@ export class Minimap {
       dragging = false;
       e.stopPropagation();
     });
+  }
+
+  /** Is the map on screen? The renderer skips its work when it is not. */
+  get isOpen(): boolean {
+    return this.open_;
+  }
+
+  open(): void {
+    if (this.open_) return;
+    this.open_ = true;
+    document.body.append(this.overlay);
+    // One frame late, so the transition has something to animate from.
+    requestAnimationFrame(() => this.overlay.classList.add('shown'));
+    this.update();
+  }
+
+  close(): void {
+    if (!this.open_) return;
+    this.open_ = false;
+    this.overlay.classList.remove('shown');
+    setTimeout(() => this.overlay.remove(), 180);
+  }
+
+  toggle(): void {
+    if (this.open_) this.close();
+    else this.open();
   }
 
   markTerrainDirty(): void {
@@ -119,7 +177,7 @@ export class Minimap {
   }
 
   update(): void {
-    if (this.collapsed) return;
+    if (!this.open_) return;
     const w = this.api.world;
     if (this.terrainDirty || this.lastSeason !== w.time.season) {
       this.lastSeason = w.time.season;
@@ -173,4 +231,10 @@ export class Minimap {
   /** Injected by the game so the minimap need not import the renderer. */
   cameraTarget: () => { x: number; y: number } | null = () => null;
   cameraSpan: () => number = () => 20;
+}
+
+function legendItem(color: string, label: string): HTMLElement {
+  const dot = el('span', { class: 'dot' });
+  dot.style.background = color;
+  return el('span', { class: 'map-legend-item' }, [dot, el('span', { text: label })]);
 }

@@ -1475,9 +1475,9 @@ body {
 .objective-chip {
   position: absolute;
   bottom: calc(var(--safe-bottom) + 76px);
-  /* Stops short of the minimap, which shares this corner of the screen. */
+  /* Stops short of the map button, which shares this corner of the screen. */
   left: calc(var(--safe-left) + 8px);
-  right: calc(var(--safe-right) + 152px);
+  right: calc(var(--safe-right) + 62px);
   display: flex;
   align-items: center;
   gap: 9px;
@@ -1548,80 +1548,141 @@ body {
 }
 
 /* ── Minimap ────────────────────────────────────────────────────────────── */
-.minimap {
+/*
+ * The map lives behind a button now. See `ui/minimap.ts` for why: a panel
+ * that is always there is a panel that is always in the way, and folding it
+ * only moved it a little.
+ */
+.map-button {
   position: absolute;
   right: calc(var(--safe-right) + 8px);
   bottom: calc(var(--safe-bottom) + 76px);
-  width: 132px;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: var(--panel);
   backdrop-filter: blur(10px);
   border: 1px solid var(--panel-line);
   border-radius: 12px;
-  padding: 5px;
-  box-shadow: var(--shadow);
-  transition: transform 0.25s ease;
-}
-
-.minimap.collapsed {
-  transform: translateY(calc(100% - 26px));
-}
-
-.minimap-canvas {
-  width: 132px;
-  height: 132px;
-  display: block;
-  border-radius: 8px;
-  touch-action: none;
-  cursor: crosshair;
-}
-
-.minimap-toggle {
-  position: absolute;
-  top: -11px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 34px;
-  height: 20px;
-  border-radius: 10px;
-  border: 1px solid var(--panel-line);
-  background: var(--panel-solid);
   color: var(--ink-dim);
-  font-size: 11px;
-  line-height: 1;
+  box-shadow: var(--shadow);
   cursor: pointer;
   padding: 0;
 }
 
-/* Keep the debug overlay clear of the minimap. */
+.map-button .ic {
+  width: 22px;
+  height: 22px;
+}
+
+.map-button:active {
+  transform: scale(0.94);
+}
+
+.map-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(8, 10, 14, 0.62);
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+
+.map-overlay.shown {
+  opacity: 1;
+}
+
+.map-panel {
+  width: min(100%, 360px);
+  background: var(--panel-solid);
+  border: 1px solid var(--panel-line);
+  border-radius: 16px;
+  padding: 12px;
+  box-shadow: var(--shadow);
+  transform: scale(0.96);
+  transition: transform 0.18s ease;
+}
+
+.map-overlay.shown .map-panel {
+  transform: scale(1);
+}
+
+.map-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.map-head h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.minimap-canvas {
+  width: 100%;
+  aspect-ratio: 1;
+  display: block;
+  border-radius: 10px;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.map-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 10px 0 6px;
+}
+
+.map-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+
+/* `.dot` is sized by whatever chip it sits in; the legend is its own chip. */
+.map-legend-item .dot,
+.sort-chip .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  display: inline-block;
+}
+
+/* Keep the debug overlay clear of the map button. */
 .debug {
-  bottom: calc(var(--safe-bottom) + 220px);
+  bottom: calc(var(--safe-bottom) + 130px);
 }
 
 @media (max-width: 380px) {
-  .minimap {
-    width: 104px;
-  }
-  .minimap-canvas {
-    width: 104px;
-    height: 104px;
-  }
   .objective-chip,
   .build-banner {
-    right: calc(var(--safe-right) + 124px);
+    right: calc(var(--safe-right) + 58px);
   }
   .events-strip {
-    max-width: calc(100vw - var(--safe-right) - 142px);
+    max-width: calc(100vw - var(--safe-right) - 76px);
   }
 }
 
-/* On a wide screen the sheet sits on the right, so shift the minimap left. */
+/* On a wide screen the sheet sits on the right, so shift the button left. */
 @media (min-width: 780px) {
-  .minimap {
+  .map-button {
     right: calc(var(--safe-right) + 420px);
   }
   .objective-chip,
   .build-banner {
-    right: calc(var(--safe-right) + 570px);
+    right: calc(var(--safe-right) + 474px);
   }
 }
 

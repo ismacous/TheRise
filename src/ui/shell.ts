@@ -202,7 +202,9 @@ export class UiShell {
     this.updateDock();
     const placing = this.api.placementId !== null;
     this.dock.style.display = placing ? 'none' : 'flex';
-    this.minimap.root.style.display = placing ? 'none' : 'block';
+    this.minimap.root.style.display = placing ? 'none' : 'flex';
+    // Placing a building needs the valley, not a map of it.
+    if (placing) this.minimap.close();
     this.updateEvents();
     this.updateObjective();
     this.updateBanner();
