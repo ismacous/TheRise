@@ -556,13 +556,31 @@ export class Game implements GameApi {
   }
 
   private wireLifecycle(): void {
+    // Leaving the game has to stop the sound as well as save the village. An
+    // Android WebView keeps its AudioContext running in the background: a
+    // storm you walked away from carried on through a locked screen until the
+    // app was killed from the task switcher.
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) {
+        this.sound.suspend();
         void writeSave(this.sim, this.genOptions).catch(() => undefined);
+      } else {
+        this.sound.resume();
       }
     });
     window.addEventListener('pagehide', () => {
+      this.sound.suspend();
       void writeSave(this.sim, this.genOptions).catch(() => undefined);
+    });
+    window.addEventListener('pageshow', () => this.sound.resume());
+    // `freeze` is the one the Android WebView fires reliably when the app is
+    // put aside without the page being hidden first.
+    window.addEventListener('freeze', () => this.sound.suspend());
+    window.addEventListener('resume', () => this.sound.resume());
+    window.addEventListener('blur', () => {
+      // Only when the page really lost the screen: a blur from the on-screen
+      // keyboard must not cut the ambience mid-sentence.
+      if (document.hidden) this.sound.suspend();
     });
   }
 }

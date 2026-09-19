@@ -21,6 +21,31 @@ const VOLUME_KEY = 'therise.volume.v1';
 /** Never more than this many one-shots in flight; a busy city can ask for a lot. */
 const MAX_VOICES = 12;
 
+/**
+ * Length of the looping ambience buffers, in seconds.
+ *
+ * This used to be one second, and one second of noise on a loop is not a bed,
+ * it is a rhythm: the ear locks onto the repeat after a few passes and hears a
+ * motor turning over. Eight seconds, played back by two sources at slightly
+ * different rates, takes long enough to come round that nothing is audible as
+ * a pattern.
+ */
+const BED_SECONDS = 8;
+
+/** Seconds between two distant rolls of thunder during a storm. */
+const THUNDER_MIN = 26;
+const THUNDER_SPREAD = 45;
+
+/**
+ * How long, on average, between two birds.
+ *
+ * A bird every four seconds is not a countryside, it is an aviary — and after
+ * ten minutes of play it is the only thing you can hear. One every twenty-odd
+ * seconds reads as "there are birds about" and then gets out of the way.
+ */
+const BIRD_MIN = 13;
+const BIRD_SPREAD = 26;
+
 export type SoundName =
   | 'chop'
   | 'saw'
@@ -92,14 +117,20 @@ export class SoundEngine {
   private windGain: GainNode | null = null;
   private windFilter: BiquadFilterNode | null = null;
   private rainGain: GainNode | null = null;
+  private rainFilter: BiquadFilterNode | null = null;
   private noise: AudioBuffer | null = null;
+  private bed: AudioBuffer | null = null;
+  private drops: AudioBuffer | null = null;
   private voices = 0;
 
   muted = readFlag(MUTE_KEY, false);
   volume = readNumber(VOLUME_KEY, 0.7);
 
   private workTimer = 0;
-  private birdTimer = 2;
+  private birdTimer = 6;
+  private gust = 0;
+  private gustTarget = 0;
+  private thunderTimer = THUNDER_MIN;
   private lastDay = 0;
 
   /** Call from a real pointer or key event; safe to call repeatedly. */
@@ -143,7 +174,7 @@ export class SoundEngine {
 
   // ── Ambience ─────────────────────────────────────────────────────────────
 
-  /** One second of pink-ish noise, reused by wind, rain and every one-shot. */
+  /** One second of pink-ish noise, reused by every one-shot. */
   private noiseBuffer(): AudioBuffer {
     if (this.noise) return this.noise;
     const ctx = this.ctx!;
@@ -161,40 +192,132 @@ export class SoundEngine {
     return buffer;
   }
 
+  /**
+   * A long loop of broadband noise for the ambient beds.
+   *
+   * Deliberately *not* the one-shot buffer: that one is filtered so far down
+   * that there is nothing left above a kilohertz, and rain built on it was a
+   * hum with a whistle on top rather than water. This one keeps its top end,
+   * and the filters downstream decide what each bed sounds like.
+   */
+  private bedBuffer(): AudioBuffer {
+    if (this.bed) return this.bed;
+    const ctx = this.ctx!;
+    const n = Math.floor(ctx.sampleRate * BED_SECONDS);
+    const buffer = ctx.createBuffer(1, n, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    let last = 0;
+    for (let i = 0; i < n; i++) {
+      const white = Math.random() * 2 - 1;
+      // Barely coloured: a touch of smoothing to take the digital edge off,
+      // nothing like the one-pole above.
+      last = last * 0.25 + white * 0.75;
+      data[i] = last;
+    }
+    // Cross-fade the tail into the head so the seam is not a click.
+    const fade = Math.floor(ctx.sampleRate * 0.05);
+    for (let i = 0; i < fade; i++) {
+      const k = i / fade;
+      data[i] = data[i] * k + data[n - fade + i] * (1 - k);
+    }
+    this.bed = buffer;
+    return buffer;
+  }
+
+  /**
+   * Rain is not just hiss: what makes it read as *rain* is the hail of
+   * individual drops landing. This buffer is a few thousand short decaying
+   * impulses scattered at random — played on a loop under the hiss, it is the
+   * difference between weather and a radio between stations.
+   */
+  private dropBuffer(): AudioBuffer {
+    if (this.drops) return this.drops;
+    const ctx = this.ctx!;
+    const n = Math.floor(ctx.sampleRate * BED_SECONDS);
+    const buffer = ctx.createBuffer(1, n, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    const count = Math.floor(BED_SECONDS * 900);
+    for (let d = 0; d < count; d++) {
+      const at = Math.floor(Math.random() * (n - 400));
+      const decay = 0.0016 + Math.random() * 0.004;
+      const len = Math.floor(ctx.sampleRate * decay);
+      const amp = 0.25 + Math.random() * 0.75;
+      for (let i = 0; i < len; i++) {
+        data[at + i] += (Math.random() * 2 - 1) * amp * (1 - i / len);
+      }
+    }
+    const fade = Math.floor(ctx.sampleRate * 0.05);
+    for (let i = 0; i < fade; i++) {
+      const k = i / fade;
+      data[i] = data[i] * k + data[n - fade + i] * (1 - k);
+    }
+    this.drops = buffer;
+    return buffer;
+  }
+
+  /** Starts a looping source on the ambience bed, at its own rate. */
+  private loop(buffer: AudioBuffer, rate: number, destination: AudioNode): void {
+    const source = this.ctx!.createBufferSource();
+    source.buffer = buffer;
+    source.loop = true;
+    source.playbackRate.value = rate;
+    source.connect(destination);
+    source.start(this.ctx!.currentTime + Math.random() * 0.2);
+  }
+
   private buildAmbience(): void {
     const ctx = this.ctx!;
     this.ambientGain = ctx.createGain();
     this.ambientGain.gain.value = 1;
     this.ambientGain.connect(this.master!);
 
-    // Wind: looping noise through a gentle band-pass.
+    // ── Wind ───────────────────────────────────────────────────────────────
+    // A low-pass, not a resonant band-pass: a band-pass with any Q at all on
+    // a noise bed is a pitch, and a pitch that never stops is a drone. Two
+    // sources at different rates keep it from ever settling into a pattern.
     this.windFilter = ctx.createBiquadFilter();
-    this.windFilter.type = 'bandpass';
-    this.windFilter.frequency.value = 420;
-    this.windFilter.Q.value = 0.7;
+    this.windFilter.type = 'lowpass';
+    this.windFilter.frequency.value = 500;
+    this.windFilter.Q.value = 0.4;
     this.windGain = ctx.createGain();
-    this.windGain.gain.value = 0.05;
-    const wind = ctx.createBufferSource();
-    wind.buffer = this.noiseBuffer();
-    wind.loop = true;
-    wind.connect(this.windFilter);
+    this.windGain.gain.value = 0.03;
     this.windFilter.connect(this.windGain);
     this.windGain.connect(this.ambientGain);
-    wind.start();
+    this.loop(this.bedBuffer(), 1, this.windFilter);
+    this.loop(this.bedBuffer(), 0.77, this.windFilter);
 
-    // Rain: the same noise, brighter and only audible when it is raining.
-    const rainFilter = ctx.createBiquadFilter();
-    rainFilter.type = 'highpass';
-    rainFilter.frequency.value = 1400;
+    // ── Rain ───────────────────────────────────────────────────────────────
+    // Two layers: the broad hiss of water on ground, and the drops on top.
     this.rainGain = ctx.createGain();
     this.rainGain.gain.value = 0;
-    const rain = ctx.createBufferSource();
-    rain.buffer = this.noiseBuffer();
-    rain.loop = true;
-    rain.connect(rainFilter);
-    rainFilter.connect(this.rainGain);
     this.rainGain.connect(this.ambientGain);
-    rain.start();
+
+    this.rainFilter = ctx.createBiquadFilter();
+    this.rainFilter.type = 'lowpass';
+    this.rainFilter.frequency.value = 5200;
+    this.rainFilter.Q.value = 0.4;
+    const rainBody = ctx.createBiquadFilter();
+    rainBody.type = 'highpass';
+    rainBody.frequency.value = 420;
+    rainBody.Q.value = 0.5;
+    const hiss = ctx.createGain();
+    hiss.gain.value = 0.55;
+    this.rainFilter.connect(rainBody);
+    rainBody.connect(hiss);
+    hiss.connect(this.rainGain);
+    this.loop(this.bedBuffer(), 1.13, this.rainFilter);
+    this.loop(this.bedBuffer(), 0.89, this.rainFilter);
+
+    const dropTone = ctx.createBiquadFilter();
+    dropTone.type = 'bandpass';
+    dropTone.frequency.value = 3100;
+    dropTone.Q.value = 0.8;
+    const dropGain = ctx.createGain();
+    dropGain.gain.value = 0.9;
+    dropTone.connect(dropGain);
+    dropGain.connect(this.rainGain);
+    this.loop(this.dropBuffer(), 1, dropTone);
+    this.loop(this.dropBuffer(), 0.81, dropTone);
   }
 
   /**
@@ -202,26 +325,43 @@ export class SoundEngine {
    * work sound from whatever is being made near the camera.
    */
   update(world: World, dt: number, cameraX: number, cameraY: number, span: number): void {
-    if (!this.ctx || this.muted) return;
+    if (!this.ctx || this.muted || this.ctx.state !== 'running') return;
     const now = this.ctx.currentTime;
     const daylight = world.daylight();
 
     // Wind picks up in a storm and at night, and drops on a still summer day.
     const stormy = world.weather === 'storm' ? 1 : world.weather === 'rain' ? 0.5 : 0;
-    const windTarget = 0.03 + stormy * 0.09 + (1 - daylight) * 0.02;
-    this.windGain!.gain.setTargetAtTime(windTarget, now, 0.8);
-    this.windFilter!.frequency.setTargetAtTime(380 + stormy * 520, now, 1.2);
+    // Gusting. A bed held at a constant level is a drone whatever it is made
+    // of; what stops the ear treating it as machinery is that it breathes.
+    this.gust += (this.gustTarget - this.gust) * Math.min(1, dt * 0.4);
+    if (Math.random() < dt * 0.14) this.gustTarget = Math.random();
+    const windTarget = (0.022 + stormy * 0.06 + (1 - daylight) * 0.012) * (0.55 + this.gust * 0.75);
+    this.windGain!.gain.setTargetAtTime(windTarget, now, 1.1);
+    this.windFilter!.frequency.setTargetAtTime(380 + stormy * 300 + this.gust * 260, now, 1.6);
 
-    const rainTarget = world.weather === 'storm' ? 0.075 : world.weather === 'rain' ? 0.045 : 0;
+    const rainTarget = world.weather === 'storm' ? 0.085 : world.weather === 'rain' ? 0.05 : 0;
     this.rainGain!.gain.setTargetAtTime(rainTarget, now, 1.5);
+    // Heavier rain is brighter: more drops, less muffled by distance.
+    this.rainFilter!.frequency.setTargetAtTime(4200 + stormy * 2600, now, 2);
 
-    // Birds, in daylight, outside winter.
+    // Distant thunder, rarely, and only in a real storm.
+    if (world.weather === 'storm') {
+      this.thunderTimer -= dt;
+      if (this.thunderTimer <= 0) {
+        this.thunderTimer = THUNDER_MIN + Math.random() * THUNDER_SPREAD;
+        this.thunder();
+      }
+    } else {
+      this.thunderTimer = THUNDER_MIN + Math.random() * THUNDER_SPREAD;
+    }
+
+    // Birds, in daylight, outside winter. Rare on purpose — see BIRD_MIN.
     this.birdTimer -= dt;
     if (this.birdTimer <= 0) {
-      this.birdTimer = 2.5 + Math.random() * 6;
+      this.birdTimer = BIRD_MIN + Math.random() * BIRD_SPREAD;
       const season = world.time.season;
       if (daylight > 0.45 && season !== 'winter' && world.weather === 'clear') {
-        this.bird(0.5 + Math.random() * 0.5);
+        this.bird(0.45 + Math.random() * 0.45);
       }
     }
 
@@ -272,6 +412,9 @@ export class SoundEngine {
 
   play(name: SoundName, gain = 0.4): void {
     if (!this.ctx || this.muted || this.voices >= MAX_VOICES) return;
+    // A suspended context has a frozen clock: anything scheduled while the
+    // game is in the background would all fire at once on the way back.
+    if (this.ctx.state !== 'running') return;
     const ctx = this.ctx;
     const now = ctx.currentTime;
     switch (name) {
@@ -421,26 +564,77 @@ export class SoundEngine {
     this.startStop(noise, at, length);
   }
 
-  /** Two quick sine sweeps: a bird, as far as anyone is concerned. */
+  /**
+   * A bird.
+   *
+   * Three shapes rather than one: a fast trill, a two-note whistle, and a low
+   * slow coo. Hearing the same four-note sweep every time is what made the old
+   * ones grating long before their frequency did.
+   */
   private bird(gain: number): void {
     const ctx = this.ctx!;
     const at = ctx.currentTime + 0.02;
-    const notes = 2 + Math.floor(Math.random() * 3);
-    for (let i = 0; i < notes; i++) {
-      const t = at + i * (0.09 + Math.random() * 0.05);
-      const osc = ctx.createOscillator();
-      osc.type = 'sine';
-      const base = 2200 + Math.random() * 1500;
-      osc.frequency.setValueAtTime(base, t);
-      osc.frequency.exponentialRampToValueAtTime(base * (1.2 + Math.random() * 0.5), t + 0.05);
-      const env = ctx.createGain();
-      env.gain.setValueAtTime(0.0008, t);
-      env.gain.linearRampToValueAtTime(0.035 * gain, t + 0.012);
-      env.gain.exponentialRampToValueAtTime(0.0008, t + 0.07);
-      osc.connect(env);
-      env.connect(this.master!);
-      this.startStop(osc, t, 0.08);
+    const kind = Math.random();
+    if (kind < 0.34) {
+      // Trill: many short notes, barely moving in pitch.
+      const base = 2600 + Math.random() * 1400;
+      const notes = 4 + Math.floor(Math.random() * 4);
+      for (let i = 0; i < notes; i++) {
+        this.chirp(at + i * 0.055, base * (0.97 + Math.random() * 0.06), 1.04, 0.045, 0.026 * gain);
+      }
+    } else if (kind < 0.75) {
+      // Two-note whistle, the second answering the first.
+      const base = 1900 + Math.random() * 1100;
+      this.chirp(at, base, 1.35 + Math.random() * 0.3, 0.09, 0.03 * gain);
+      this.chirp(at + 0.17, base * 0.82, 1.2, 0.11, 0.024 * gain);
+    } else {
+      // A wood pigeon somewhere behind the trees.
+      const base = 520 + Math.random() * 120;
+      this.chirp(at, base, 1.12, 0.17, 0.03 * gain);
+      this.chirp(at + 0.26, base * 0.94, 0.92, 0.22, 0.022 * gain);
     }
+  }
+
+  /** One sung note: a sine sweeping from `freq` by `bend` over `length`. */
+  private chirp(at: number, freq: number, bend: number, length: number, gain: number): void {
+    const ctx = this.ctx!;
+    const osc = ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, at);
+    osc.frequency.exponentialRampToValueAtTime(freq * bend, at + length);
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0.0008, at);
+    env.gain.linearRampToValueAtTime(gain, at + Math.min(0.02, length * 0.25));
+    env.gain.exponentialRampToValueAtTime(0.0008, at + length);
+    osc.connect(env);
+    env.connect(this.master!);
+    this.startStop(osc, at, length);
+  }
+
+  /**
+   * Thunder: a long roll of very low noise, far away. No crack — a strike
+   * overhead would be a jump-scare in a game about carrying planks about.
+   */
+  private thunder(): void {
+    const ctx = this.ctx!;
+    const at = ctx.currentTime + 0.05;
+    const length = 2.4 + Math.random() * 1.8;
+    const noise = ctx.createBufferSource();
+    noise.buffer = this.bedBuffer();
+    noise.playbackRate.value = 0.25;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(260, at);
+    filter.frequency.exponentialRampToValueAtTime(70, at + length);
+    filter.Q.value = 0.6;
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0.0008, at);
+    env.gain.linearRampToValueAtTime(0.16, at + 0.5 + Math.random() * 0.4);
+    env.gain.exponentialRampToValueAtTime(0.0008, at + length);
+    noise.connect(filter);
+    filter.connect(env);
+    env.connect(this.master!);
+    this.startStop(noise, at, length);
   }
 
   private startStop(node: AudioScheduledSourceNode, at: number, length: number): void {
@@ -450,6 +644,25 @@ export class SoundEngine {
     };
     node.start(at);
     node.stop(at + length + 0.02);
+  }
+
+  /**
+   * Silences everything until `resume()`.
+   *
+   * This is not a nicety. A WebView that goes to the background keeps its
+   * AudioContext running: leaving the game with rain playing left the rain
+   * playing through a locked screen, and the only way to stop it was to kill
+   * the app from the task switcher.
+   */
+  suspend(): void {
+    if (!this.ctx || this.ctx.state === 'closed' || this.ctx.state === 'suspended') return;
+    void this.ctx.suspend().catch(() => undefined);
+  }
+
+  /** Brings the ambience back when the player returns to the game. */
+  resume(): void {
+    if (!this.ctx || this.ctx.state !== 'suspended') return;
+    void this.ctx.resume().catch(() => undefined);
   }
 
   dispose(): void {
