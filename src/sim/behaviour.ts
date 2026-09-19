@@ -19,6 +19,7 @@ import {
   yieldFromNode,
 } from './villagers';
 import { outputMultiplier } from './levels';
+import { recordOutput } from './output';
 import { activeRecipe } from './recipes';
 import type { Building, HaulJob, Villager } from './types';
 import type { World } from './world';
@@ -336,12 +337,14 @@ function doHarvest(world: World, v: Villager, dt: number): void {
     node.claimedBy = 0;
     v.carrying = out.good;
     v.carryAmount = taken;
+    recordOutput(b, out.good, taken);
     if (g.consumes) {
       for (const [good, need] of Object.entries(g.consumes)) {
         b.inv[good as GoodId] = Math.max(0, (b.inv[good as GoodId] ?? 0) - (need as number));
       }
     }
     for (const [good, amount] of extraYields(world, b)) {
+      recordOutput(b, good, amount);
       depositIntoBuilding(world, b, good, amount);
     }
     v.task.nodeId = undefined;
@@ -453,6 +456,7 @@ function doProduce(world: World, v: Villager, dt: number): void {
     const yieldMul = world.modifiers.craftYield * outputMultiplier(b);
     for (const [good, amount] of Object.entries(recipe.outputs)) {
       const qty = Math.max(1, Math.round((amount as number) * yieldMul));
+      recordOutput(b, good as GoodId, qty);
       const leftover = depositIntoBuilding(world, b, good as GoodId, qty);
       if (leftover > 0) world.addToStock(good as GoodId, leftover, b.cx, b.cy);
     }

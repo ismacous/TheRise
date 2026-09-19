@@ -1,5 +1,6 @@
 import type { BuildingId, NodeKind } from '../data/buildings';
 import type { GoodId } from '../data/goods';
+import type { OutputMeter } from './output';
 import type { ProfessionId } from '../data/professions';
 import type { ResearchId } from '../data/research';
 
@@ -103,6 +104,8 @@ export interface Building {
   recipeIndex: number;
   /** Rolling efficiency 0..1 used by the UI. */
   efficiency: number;
+  /** Measured output, in units per minute. See `sim/output.ts`. */
+  output: OutputMeter;
   /** Seconds this building has been idle for lack of input/target. */
   idleTime: number;
   /** Fire intensity 0..1 while burning. */

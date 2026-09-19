@@ -6,6 +6,7 @@ import type { Building, ResourceNode, Villager } from './types';
 import type { WorldGenOptions } from './worldgen';
 import { createPartnerRuntime } from './economy';
 import { History } from './history';
+import { emptyMeter } from './output';
 import { DesirePaths } from './paths';
 import { TRADE_PARTNERS } from '../data/trade';
 
@@ -176,6 +177,9 @@ export function deserialize(data: SaveData): Simulation {
       recipeIndex: raw.recipeIndex ?? 0,
       level: raw.level ?? 1,
       upgrade: raw.upgrade ? { ...raw.upgrade } : null,
+      // Measured output is not worth saving: half a minute of play rebuilds it,
+      // and a stale rate read from a save would be worse than none.
+      output: emptyMeter(),
     };
     w.map.flatten(b.x, b.y, b.w, b.h);
     w.map.setOccupancy(b.x, b.y, b.w, b.h, b.id);

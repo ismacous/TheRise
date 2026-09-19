@@ -7,6 +7,7 @@ import { generateWorld, type WorldGenOptions } from './worldgen';
 import { PathFinder } from './pathfinding';
 import { SpatialGrid } from './spatial';
 import { computeModifiers, type Modifiers } from './modifiers';
+import { emptyMeter } from './output';
 import {
   gatherRadius,
   housingCapacity,
@@ -464,6 +465,7 @@ export class World {
       work: 0,
       recipeIndex: 0,
       efficiency: 0,
+      output: emptyMeter(),
       idleTime: 0,
       fire: 0,
       active: true,

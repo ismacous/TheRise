@@ -16,6 +16,7 @@ import {
 } from './population';
 import { housingCapacity } from './levels';
 import { updateObjectives } from './objectives';
+import { updateOutputMeters } from './output';
 import { updateResearch } from './research';
 import { NUTRITION_PER_DAY, countFoodVariety, createVillager, rescueIfTrapped } from './villagers';
 import { DAYS_PER_SEASON, DAY_SECONDS, World } from './world';
@@ -34,6 +35,7 @@ export class Simulation {
   private jobTimer = 0;
   private employmentTimer = 0;
   private statsTimer = 0;
+  private outputTimer = 1;
   private serviceTimer = 0;
   private incomeTimer = 0;
   private lastTierNotified = 1;
@@ -111,6 +113,14 @@ export class Simulation {
     updatePopulation(w, dt);
     updateImmigration(w, dt);
     updateEmigration(w, dt);
+
+    // Closing an output window is a walk of the building list; once a second
+    // is plenty for a figure measured over thirty.
+    this.outputTimer -= dt;
+    if (this.outputTimer <= 0) {
+      updateOutputMeters(w, 1 - this.outputTimer);
+      this.outputTimer = 1;
+    }
 
     this.statsTimer -= dt;
     if (this.statsTimer <= 0) {

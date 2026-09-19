@@ -4,6 +4,7 @@ import { ALL_RESEARCH_IDS } from '../src/data/research';
 import { taxHappiness, taxIncome } from '../src/sim/economy';
 import { maxLevelOf, storageCapacity, upgradeTargetOf } from '../src/sim/levels';
 import { computeModifiers } from '../src/sim/modifiers';
+import { outputRates, recordOutput, updateOutputMeters } from '../src/sim/output';
 import { researchSpeed } from '../src/sim/research';
 import type { World } from '../src/sim/world';
 
@@ -92,5 +93,35 @@ describe('what the tree holds back', () => {
     if (hall!.workers.length === 0) expect(researchSpeed(w)).toBe(0);
     else expect(researchSpeed(w)).toBeGreaterThan(0);
     expect(scholar).toBeTruthy();
+  });
+});
+
+/**
+ * "Ma scierie suit-elle mes bûcherons ?" is not answerable from the recipe: a
+ * camp whose trees are far away spends its day walking. So the rate shown is
+ * measured, and this pins what measuring means.
+ */
+describe('the output meter', () => {
+  it('turns what a building actually made into units per minute', () => {
+    const sim = createNewGame({ seed: 'meter' });
+    const w = sim.world;
+    const b = w.buildingList[0];
+
+    // Nothing measured yet: the panel says so rather than claiming zero.
+    expect(b.output.measured).toBe(false);
+    expect(outputRates(b)).toEqual([]);
+
+    recordOutput(b, 'logs', 15);
+    updateOutputMeters(w, 30);
+
+    expect(b.output.measured).toBe(true);
+    expect(outputRates(b)[0]).toEqual({ good: 'logs', perMinute: 30 });
+
+    // A building that stops decays towards zero instead of keeping its last
+    // good figure for ever.
+    updateOutputMeters(w, 30);
+    expect(outputRates(b)[0].perMinute).toBe(15);
+    for (let i = 0; i < 12; i++) updateOutputMeters(w, 30);
+    expect(outputRates(b)).toEqual([]);
   });
 });

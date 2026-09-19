@@ -44,6 +44,7 @@ import {
   upgradeTargetOf,
   workerSlots,
 } from '../sim/levels';
+import { outputRates } from '../sim/output';
 import { activeRecipe, recipeOptions, setRecipe } from '../sim/recipes';
 import {
   canQueueResearch,
@@ -1499,25 +1500,35 @@ interface ProdLine {
 
 function productionSummary(api: GameApi): ProdLine[] {
   const w = api.world;
-  const byDef = new Map<BuildingId, { count: number; eff: number; workers: number; cap: number }>();
+  const byDef = new Map<
+    BuildingId,
+    { count: number; eff: number; workers: number; cap: number; rate: Map<GoodId, number> }
+  >();
   for (const b of w.buildingList) {
     if (b.state !== 'active') continue;
     const def = BUILDINGS[b.def];
     if (!def.recipe && !def.gather && !def.recipes) continue;
-    const e = byDef.get(b.def) ?? { count: 0, eff: 0, workers: 0, cap: 0 };
+    const e = byDef.get(b.def) ?? { count: 0, eff: 0, workers: 0, cap: 0, rate: new Map() };
     e.count++;
     e.eff += b.efficiency;
     e.workers += b.workers.length;
     e.cap += def.workers;
+    // Summed across every building of the type: what the player compares is
+    // "all my woodcutters" against "all my sawmills", not one shed at a time.
+    for (const r of outputRates(b)) e.rate.set(r.good, (e.rate.get(r.good) ?? 0) + r.perMinute);
     byDef.set(b.def, e);
   }
   const out: ProdLine[] = [];
   for (const [id, e] of byDef) {
+    const best = [...e.rate.entries()].sort((a, b) => b[1] - a[1])[0];
+    const rate = best
+      ? `${GOODS[best[0]].short} ${best[1] < 1 ? best[1].toFixed(1) : Math.round(best[1])}/min`
+      : null;
     out.push({
       glyph: glyphFor(id),
       color: colorFor(id),
       name: `${BUILDINGS[id].name} ×${e.count}`,
-      detail: `${e.workers}/${e.cap} ouvriers`,
+      detail: rate ? `${e.workers}/${e.cap} ouvriers · ${rate}` : `${e.workers}/${e.cap} ouvriers`,
       efficiency: e.eff / Math.max(1, e.count),
     });
   }
@@ -1790,6 +1801,26 @@ function renderBuilding(api: GameApi, body: HTMLElement, refresh: Refresh): void
     if (def.gather.consumes) flow.append(el('span', { class: 'cost arrow', text: '→' }));
     for (const [g, n] of Object.entries(def.gather.outputs)) flow.append(goodChip(g as GoodId, `${n}`));
     if (flow.children.length > 0) body.append(flow);
+  }
+
+  // ── Measured output ─────────────────────────────────────────────────────
+  // What the recipe above promises is not what the building delivers: a camp
+  // whose trees are forty tiles away spends its day walking. This is counted,
+  // not computed, so two links of a chain can honestly be compared.
+  if (recipe || def.gather) {
+    const rates = outputRates(b);
+    body.append(el('div', { class: 'section-title', text: 'Cadence réelle' }));
+    if (!b.output.measured) {
+      body.append(el('div', { class: 'card-desc', text: 'Mesure en cours…' }));
+    } else if (rates.length === 0) {
+      body.append(el('div', { class: 'card-desc', text: 'Rien ne sort d’ici pour le moment.' }));
+    } else {
+      const row = el('div', { class: 'cost-row' });
+      for (const r of rates) {
+        row.append(goodChip(r.good, `${r.perMinute < 1 ? r.perMinute.toFixed(1) : Math.round(r.perMinute)}/min`));
+      }
+      body.append(row);
+    }
   }
 
   // ── Inventory ───────────────────────────────────────────────────────────
