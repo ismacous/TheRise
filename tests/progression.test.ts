@@ -209,3 +209,25 @@ describe('the shape of the climb', () => {
     }
   });
 });
+
+/**
+ * "J'ai souvent un malade dans les cinq premières minutes."
+ *
+ * Nothing was firing illness per villager — the whole of it came from the
+ * random event table, whose first roll used to land three minutes in with a
+ * one-in-eight chance of being a fever. On a village of ten with no herbalist
+ * and no study there is no decision in that, only a villager in bed while the
+ * player is still working out where the sawmill goes.
+ */
+describe('the opening quarter of an hour', () => {
+  it('never falls ill', () => {
+    for (const seed of ['calm-a', 'calm-b', 'calm-c', 'calm-d', 'calm-e', 'calm-f']) {
+      const sim = createNewGame({ seed });
+      const w = sim.world;
+      for (let i = 0; i < 9000; i++) sim.tick(0.1);
+      const ill = w.villagers.filter((v) => v.sick > 0).length;
+      expect(ill, `${seed}: ${ill} malade(s) dans le premier quart d'heure`).toBe(0);
+      expect(w.activeEvents.some((e) => e.kind === 'disease')).toBe(false);
+    }
+  }, 60000);
+});

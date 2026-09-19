@@ -194,15 +194,32 @@ export function updateVillageEvents(world: World, dt: number): void {
   }
   world.eventCooldown = world.rng.range(420, 900);
 
+  // Nothing bad happens to a village that is still finding its feet. A fever
+  // in the first ten minutes lands on ten people with no herbalist, no study
+  // and nothing to spare, and there is no decision in it — only a villager
+  // in bed while the player is still working out where the sawmill goes.
+  const settled = world.time.day >= SAFE_DAYS && world.stats.population >= SAFE_POPULATION;
+
+  // Disease scales with the village. Twenty people living on top of each
+  // other is not an epidemic risk; four hundred is.
+  const diseaseChance = settled
+    ? clamp(0.04 + world.stats.population / 2600, 0.04, 0.16)
+    : 0;
+
   const roll = world.rng.next();
-  // Disease and fire should be memorable, not routine.
-  if (roll < 0.12) startDisease(world);
+  if (roll < diseaseChance) startDisease(world);
   else if (roll < 0.3) startBlessing(world);
   else if (roll < 0.58) startBumperCrop(world);
   else if (roll < 0.74) startWanderingFamily(world);
   else if (roll < 0.88) startMerchantVisit(world);
-  else startHarshSeason(world);
+  else if (settled) startHarshSeason(world);
+  else startBumperCrop(world);
 }
+
+/** A village is past its founding after this many days… */
+const SAFE_DAYS = 4;
+/** …and this many people. Both, not either. */
+const SAFE_POPULATION = 14;
 
 function startDisease(world: World): void {
   const healers = world.buildingList.filter((b) => b.def === 'healer_hut' && b.state === 'active').length;

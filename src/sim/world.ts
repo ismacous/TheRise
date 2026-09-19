@@ -125,6 +125,13 @@ export class World {
   contracts: TradeContract[] = [];
   activeEvents: ActiveEvent[] = [];
   notifications: Notification[] = [];
+  /**
+   * The first village event fires early on purpose — but it can only be a
+   * kind one. See `updateVillageEvents`: nothing harmful is drawn until the
+   * village is settled. Pushing the first event back instead turned out to
+   * starve the opening village, which had quietly come to depend on an early
+   * windfall to get through its first day.
+   */
   eventCooldown = 200;
   /** Ids of guided objectives the player has already ticked off. */
   completedObjectives = new Set<string>();
