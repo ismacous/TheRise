@@ -47,9 +47,20 @@ export function recordOutput(b: Building, good: GoodId, amount: number): void {
   b.output.tally[good] = (b.output.tally[good] ?? 0) + amount;
 }
 
-/** Closes any window that is due. Called once a second, not every tick. */
-export function updateOutputMeters(world: World, dt: number): void {
+/**
+ * The once-a-second pass over the buildings: closes any measurement window
+ * that is due, and keeps `idleTime` — how long a building has been stopped —
+ * up to date.
+ *
+ * They share a walk because they are both cheap and both per-building, and a
+ * second walk of a three-hundred-building city every second is not free.
+ */
+export function updateBuildingMeters(world: World, dt: number): void {
   for (const b of world.buildingList) {
+    // A workshop pauses constantly in normal running: waiting a moment for a
+    // delivery is not a fault. What matters is how long it has been waiting.
+    b.idleTime = b.stall ? b.idleTime + dt : 0;
+
     const m = b.output;
     m.elapsed += dt;
     if (m.elapsed < WINDOW) continue;

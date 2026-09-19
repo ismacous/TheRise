@@ -22,6 +22,7 @@ import { FaunaRenderer } from './fauna';
 import { blendPalettes, seasonPalette, type SeasonPalette } from './palette';
 import { PropRenderer } from './props';
 import { TerrainRenderer } from './terrain';
+import { MarkerRenderer } from './markers';
 import { VillagerRenderer } from './villagerRenderer';
 import { WaterRenderer } from './water';
 
@@ -80,6 +81,7 @@ export class GameRenderer {
   readonly water: WaterRenderer;
   readonly buildings = new BuildingRenderer();
   readonly villagers = new VillagerRenderer();
+  readonly pins = new MarkerRenderer();
   readonly fauna = new FaunaRenderer();
   readonly particles = new ParticleSystem();
   readonly weather = new WeatherParticles();
@@ -147,6 +149,7 @@ export class GameRenderer {
       this.water.mesh,
       this.buildings.group,
       this.villagers.group,
+      this.pins.group,
       this.fauna.group,
       this.particles.mesh,
       this.markers.group,
@@ -221,6 +224,7 @@ export class GameRenderer {
     this.buildings.sync(w);
     this.buildings.update(w, dt, this.nightFactor());
     this.villagers.update(w, this.elapsed, alpha);
+    this.pins.update(w, this.controls.camera, this.controls.distance, this.elapsed);
     this.fauna.update(w, this.elapsed);
     this.water.update(this.elapsed);
     this.water.setSunColor(this.sun.color);
@@ -328,6 +332,7 @@ export class GameRenderer {
     this.water.dispose();
     this.buildings.dispose();
     this.villagers.dispose();
+    this.pins.dispose();
     this.fauna.dispose();
     this.particles.dispose();
     this.weather.dispose();

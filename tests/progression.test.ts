@@ -4,7 +4,7 @@ import { ALL_RESEARCH_IDS } from '../src/data/research';
 import { taxHappiness, taxIncome } from '../src/sim/economy';
 import { maxLevelOf, storageCapacity, upgradeTargetOf } from '../src/sim/levels';
 import { computeModifiers } from '../src/sim/modifiers';
-import { outputRates, recordOutput, updateOutputMeters } from '../src/sim/output';
+import { outputRates, recordOutput, updateBuildingMeters } from '../src/sim/output';
 import { researchSpeed } from '../src/sim/research';
 import type { World } from '../src/sim/world';
 
@@ -112,16 +112,16 @@ describe('the output meter', () => {
     expect(outputRates(b)).toEqual([]);
 
     recordOutput(b, 'logs', 15);
-    updateOutputMeters(w, 30);
+    updateBuildingMeters(w, 30);
 
     expect(b.output.measured).toBe(true);
     expect(outputRates(b)[0]).toEqual({ good: 'logs', perMinute: 30 });
 
     // A building that stops decays towards zero instead of keeping its last
     // good figure for ever.
-    updateOutputMeters(w, 30);
+    updateBuildingMeters(w, 30);
     expect(outputRates(b)[0].perMinute).toBe(15);
-    for (let i = 0; i < 12; i++) updateOutputMeters(w, 30);
+    for (let i = 0; i < 12; i++) updateBuildingMeters(w, 30);
     expect(outputRates(b)).toEqual([]);
   });
 });

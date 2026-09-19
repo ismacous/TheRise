@@ -16,7 +16,7 @@ import {
 } from './population';
 import { housingCapacity } from './levels';
 import { updateObjectives } from './objectives';
-import { updateOutputMeters } from './output';
+import { updateBuildingMeters } from './output';
 import { updateResearch } from './research';
 import { NUTRITION_PER_DAY, countFoodVariety, createVillager, rescueIfTrapped } from './villagers';
 import { DAYS_PER_SEASON, DAY_SECONDS, World } from './world';
@@ -114,11 +114,11 @@ export class Simulation {
     updateImmigration(w, dt);
     updateEmigration(w, dt);
 
-    // Closing an output window is a walk of the building list; once a second
-    // is plenty for a figure measured over thirty.
+    // A walk of the building list; once a second is plenty for a figure
+    // measured over thirty, and for a stoppage counted in seconds.
     this.outputTimer -= dt;
     if (this.outputTimer <= 0) {
-      updateOutputMeters(w, 1 - this.outputTimer);
+      updateBuildingMeters(w, 1 - this.outputTimer);
       this.outputTimer = 1;
     }
 
