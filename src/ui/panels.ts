@@ -25,6 +25,7 @@ import {
   taxIncome,
   hasTradePost,
   orderBuy,
+  partnerSeasonFactor,
   orderSell,
   sellPrice,
   TIER_NAMES,
@@ -55,6 +56,7 @@ import {
   unlockedTier,
 } from '../sim/research';
 import { FOOD_EXODUS_DAYS, fullName } from '../sim/villagers';
+import { SEASON_LABEL } from '../sim/types';
 import type { Building, Villager } from '../sim/types';
 import type { GameApi, SheetId } from './api';
 import { bar, el, onTap } from './dom';
@@ -678,6 +680,7 @@ function renderTrade(api: GameApi, body: HTMLElement, refresh: Refresh): void {
       el('div', { class: 'partner-head' }, [
         el('strong', { text: p.name }),
         el('span', { class: 'pill', text: PARTNER_KIND_LABEL[p.kind] }),
+        el('span', { class: 'pill', text: p.specialty }),
         el('span', { class: 'qty', text: `Relation ${Math.round(rt.relation)}` }),
       ]),
       el('div', { class: 'card-desc', text: p.blurb }),
@@ -686,6 +689,23 @@ function renderTrade(api: GameApi, body: HTMLElement, refresh: Refresh): void {
         text: `Trajet ${formatDuration(p.travel)} · aller simple`,
       }),
     );
+
+    // The season is half of what makes two partners worth telling apart, so
+    // say plainly whether this one is paying well today.
+    const bias = partnerSeasonFactor(w, p);
+    if (Math.abs(bias - 1) > 0.02) {
+      const better = bias > 1;
+      card.append(
+        el('div', { class: `season-note ${better ? 'good' : 'bad'}` }, [
+          icon(better ? 'good' : 'bad'),
+          el('span', {
+            text: better
+              ? `${SEASON_LABEL[w.time.season]} : ils paient ${Math.round((bias - 1) * 100)} % de plus, et vendent d'autant plus cher.`
+              : `${SEASON_LABEL[w.time.season]} : ils bradent, mais paient ${Math.round((1 - bias) * 100)} % de moins.`,
+          }),
+        ]),
+      );
+    }
 
     card.append(el('div', { class: 'section-title', text: 'Ils vendent' }));
     for (const offer of p.sells) {

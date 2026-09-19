@@ -2088,3 +2088,29 @@ body {
   margin-left: auto;
   flex: none;
 }
+
+.season-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0 2px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--ink-dim);
+}
+
+.season-note .icon {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+
+.season-note.good .icon {
+  color: var(--green);
+}
+
+.season-note.bad .icon {
+  color: var(--amber);
+}

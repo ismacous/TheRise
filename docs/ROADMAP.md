@@ -6,11 +6,12 @@ date ; c'est l'ordre dans lequel les ajouts auraient le plus de valeur.
 ## Déjà dans le jeu
 
 - Génération de vallée déterministe, 208 × 208, relief, rivières, lac, biomes
-- 60 bâtiments, 38 ressources, 54 recherches, 7 partenaires commerciaux
+- 67 bâtiments, 34 ressources, 48 recherches, 10 partenaires commerciaux
 - Villageois autonomes : métiers, besoins, logement, natalité, mortalité
 - Logistique par tableau de tâches, porteurs, chantiers, marchés
 - Quatre saisons, cycle jour/nuit, météo, incendies, épidémies, événements
-- Commerce à quatre paliers avec relation et prix dynamiques
+- Commerce à quatre paliers : relation, prestige, marge du caravanier et
+  saisons propres à chaque partenaire, sans aucun aller-retour rentable
 - 17 objectifs guidés
 - Page Économie : courbes des recettes, dépenses, trésor, bonheur, population
   et vivres sur une année de jeu, avec la ventilation de chaque pièce gagnée

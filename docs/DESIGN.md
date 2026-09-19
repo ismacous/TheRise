@@ -379,19 +379,47 @@ entier ne coûte pas plus cher qu'un seul atelier.
 
 ## 8. Commerce
 
-Sept partenaires répartis sur quatre paliers, débloqués par la recherche :
+Dix partenaires répartis sur quatre paliers, débloqués par la recherche :
 
 | Palier | Type | Caractère |
 |---|---|---|
-| 1 | Hameaux | Petits volumes, matières premières |
-| 2 | Bourgs | Bon débouché pour l'artisanat |
-| 3 | Cités | Paient le luxe au prix fort |
-| 4 | Lointain | Trajets très longs, marges énormes |
+| 1 | Hameaux | Bûcherons, carriers, laboureurs — matières premières, routes courtes |
+| 2 | Bourgs | Tanneurs, place marchande, mineurs de montagne |
+| 3 | Cités | Capitale et port : elles paient le luxe au prix fort |
+| 4 | Lointain | Oasis du sud et comptoirs du nord : trajets énormes, marges énormes |
 
-Les prix bougent avec trois facteurs : le multiplicateur propre à l'offre, la
-relation avec le partenaire (qui monte à chaque échange), et le rang du village.
+### La règle qui tient toute la table
+
+**Aucun bien n'est à la fois vendu et acheté dans le réseau.** Les partenaires
+vendent des matières premières et achètent des produits travaillés, point.
+
+Sans cette règle, le réseau imprimait de l'argent. Kharel vendait la
+joaillerie à 0,85 fois sa valeur et Cité-Haute la payait 1,65 ; avec la remise
+de relation d'un côté et le bonus de prestige de l'autre, une caravane de
+douze pièces transformait 629 pièces en 1 943 — **+209 %, reproductible à
+l'infini, sans produire quoi que ce soit**. Cinq autres biens avaient la même
+boucle. L'impôt, les ateliers et tout l'arbre de recherche devenaient sans
+objet dès l'ouverture de l'ère 3. Un test parcourt les quatre saisons, au
+meilleur prix que le jeu puisse offrir, et refuse le moindre aller-retour
+rentable.
+
+Le profit vient donc de la **transformation**, ce à quoi servent les chaînes
+de production : on achète le minerai, on vend les outils.
+
+### Ce qui fait bouger un prix
+
+1. le multiplicateur propre à l'offre ;
+2. la marge du caravanier — +15 % à l'achat, −8 % à la vente — qui fait qu'un
+   achat d'urgence se sent passer ;
+3. la relation avec le partenaire, qui monte à chaque échange ;
+4. le rang du village ;
+5. la saison, globalement sur la nourriture **et par partenaire** : Hauteroche
+   est enneigée et paie 35 % de plus l'hiver, Chaume-les-Prés brade son grain
+   après la moisson et le rachète cher au printemps, Kharel paie mieux en
+   plein été. C'est ce qui rend deux acheteurs du même bien différents.
+
 Les caravanes mettent du temps à faire l'aller-retour, ce qui rend l'achat
-d'urgence coûteux en temps plutôt qu'interdit.
+d'urgence coûteux en temps autant qu'en or.
 
 ---
 

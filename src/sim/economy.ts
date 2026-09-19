@@ -56,14 +56,39 @@ export function seasonalPriceFactor(world: World, good: GoodId): number {
   }
 }
 
+/**
+ * The merchant's cut. A caravan master buys below and sells above, both ways,
+ * which is what keeps moving goods around from being free money and makes an
+ * emergency purchase something you feel.
+ */
+const MERCHANT_MARKUP = 1.15;
+const MERCHANT_DISCOUNT = 0.92;
+
+/**
+ * A partner's own seasonal character, on top of the global one on food: the
+ * mountain town that pays anything to eat in winter, the farmers who brade
+ * their grain after the harvest. It is what makes two partners who buy the
+ * same thing worth telling apart.
+ */
+export function partnerSeasonFactor(world: World, p: TradePartnerDef): number {
+  return p.seasonBias?.[world.time.season] ?? 1;
+}
+
 /** Price the partner charges you per unit when buying from them. */
 export function buyPrice(world: World, p: TradePartnerDef, good: GoodId): number {
   const offer = p.sells.find((o) => o.good === good);
   if (!offer) return Infinity;
   const rt = world.partners.get(p.id)!;
   const relationDiscount = 1 - (rt.relation / 100) * 0.12;
-  const season = seasonalPriceFactor(world, good);
-  return Math.max(1, Math.round(GOODS[good].value * offer.priceMul * relationDiscount * season * 10) / 10);
+  const season = seasonalPriceFactor(world, good) * partnerSeasonFactor(world, p);
+  return (
+    Math.max(
+      1,
+      Math.round(
+        GOODS[good].value * offer.priceMul * MERCHANT_MARKUP * relationDiscount * season * 10,
+      ) / 10,
+    )
+  );
 }
 
 /** Price the partner pays you per unit when selling to them. */
@@ -74,10 +99,12 @@ export function sellPrice(world: World, p: TradePartnerDef, good: GoodId): numbe
   const relationBonus = 1 + (rt.relation / 100) * 0.18;
   // Reputation of the village itself nudges prices up as it grows.
   const prestige = 1 + (world.stats.tier - 1) * 0.045;
-  const season = seasonalPriceFactor(world, good);
+  const season = seasonalPriceFactor(world, good) * partnerSeasonFactor(world, p);
   return Math.max(
     1,
-    Math.round(GOODS[good].value * offer.priceMul * relationBonus * prestige * season * 10) / 10,
+    Math.round(
+      GOODS[good].value * offer.priceMul * MERCHANT_DISCOUNT * relationBonus * prestige * season * 10,
+    ) / 10,
   );
 }
 
