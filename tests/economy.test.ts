@@ -85,7 +85,7 @@ describe('production chains', () => {
   it('runs the full wheat to bread chain', () => {
     const sim = createNewGame({ seed: 'bread' });
     const w = sim.world;
-    for (const r of ['r_agriculture', 'r_milling', 'r_charcoal', 'r_baking'] as const) {
+    for (const r of ['r_agriculture', 'r_milling', 'r_charcoal'] as const) {
       w.research.completed.add(r);
     }
     // Enough hands to staff every step.
@@ -182,7 +182,7 @@ describe('textile chain', () => {
   it('turns wool into cloth and clothes', () => {
     const sim = createNewGame({ seed: 'textile' });
     const w = sim.world;
-    for (const r of ['r_husbandry_fowl', 'r_husbandry_sheep', 'r_weaving', 'r_tailoring'] as const) {
+    for (const r of ['r_husbandry_fowl', 'r_husbandry_sheep', 'r_weaving'] as const) {
       w.research.completed.add(r);
     }
     w.treasury = 5000;

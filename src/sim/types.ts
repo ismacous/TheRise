@@ -227,7 +227,6 @@ export interface HaulJob {
 }
 
 export interface ResearchState {
-  points: number;
   completed: Set<ResearchId>;
   /** Currently studied topic. */
   active: ResearchId | null;

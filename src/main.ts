@@ -77,6 +77,7 @@ async function boot(): Promise<void> {
     RESEARCH: (await import('./data/research')).RESEARCH,
     GOODS: (await import('./data/goods')).GOODS,
     createVillager: (await import('./sim/villagers')).createVillager,
+    workerSlots: (await import('./sim/levels')).workerSlots,
   };
   Object.assign(window as unknown as Record<string, unknown>, {
     game,

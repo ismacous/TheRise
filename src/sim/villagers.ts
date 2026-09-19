@@ -4,6 +4,7 @@ import { BUILDINGS, type NodeKind } from '../data/buildings';
 import { GOODS, type GoodId } from '../data/goods';
 import { FEMALE_NAMES, HAIR_COLORS, MALE_NAMES, SKIN_TONES, SURNAMES } from '../data/names';
 import type { ProfessionId } from '../data/professions';
+import { taxHappiness } from './economy';
 import { gatherRadius, outputMultiplier, storageCapacity } from './levels';
 import { gatherYieldFor, workSpeedFor } from './modifiers';
 import { TERRAIN, type Building, type ResourceNode, type Villager } from './types';
@@ -209,6 +210,11 @@ export function buildingSpace(_world: World, b: Building): number {
 }
 
 export function depositIntoBuilding(world: World, b: Building, good: GoodId, amount: number): number {
+  // Somebody got here, so whatever made an earlier carrier give up is over.
+  // Without this a single timed-out delivery labels a storehouse unreachable
+  // for the rest of the game: nothing else ever clears the flag on a building
+  // that produces nothing.
+  if (b.stall === 'Accès bloqué') b.stall = null;
   const space = buildingSpace(world, b);
   const put = Math.max(0, Math.min(space, amount));
   if (put > 0) b.inv[good] = (b.inv[good] ?? 0) + put;
@@ -332,6 +338,7 @@ export function happinessTarget(world: World, v: Villager): number {
   }
 
   if (v.workId === 0 && v.profession !== 'child') h -= 6;
+  h += taxHappiness(world);
   if (v.sick > 0) h -= 20;
   if (world.weather === 'rain') h -= 4;
   if (world.weather === 'storm') h -= 9;

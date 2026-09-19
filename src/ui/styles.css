@@ -393,6 +393,14 @@ body {
   transform: translateY(0);
 }
 
+/* The knowledge tree is a page of its own, not a peek-through drawer. */
+.sheet.full {
+  max-height: 100%;
+  top: 0;
+  border-radius: 0;
+  padding-top: var(--safe-top);
+}
+
 .sheet-grip {
   width: 38px;
   height: 4px;
@@ -688,19 +696,140 @@ body {
   margin-bottom: 12px;
 }
 
-.branch-head {
+.research-warn {
+  background: linear-gradient(135deg, rgba(224, 112, 92, 0.16), rgba(224, 112, 92, 0.04));
+  border: 1px solid rgba(224, 112, 92, 0.42);
+  border-radius: var(--radius);
+  padding: 11px 12px;
+  margin-bottom: 12px;
+}
+
+.research-status {
   display: flex;
-  align-items: center;
   gap: 7px;
-  margin: 14px 0 7px;
-  font-size: 13px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.stat-chip {
+  flex: 1 1 90px;
+  background: var(--panel-raised);
+  border: 1px solid var(--panel-line);
+  border-radius: var(--radius-sm);
+  padding: 7px 9px;
+}
+
+.stat-chip .k {
+  display: block;
+  font-size: 10.5px;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.stat-chip .v {
+  display: block;
+  font-size: 14px;
   font-weight: 600;
 }
 
-.branch-head .line {
-  flex: 1;
-  height: 1px;
-  background: var(--panel-line);
+/* Eras read as chapters: a numbered rule, then the studies below it. */
+.era-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 18px 0 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--panel-raised);
+  border: 1px solid var(--panel-line);
+}
+
+.era-head .era-n {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 13px;
+  background: var(--gold);
+  color: #1c1814;
+}
+
+.era-head .era-name {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.era-head .era-sub {
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+
+.era-head .bar {
+  width: 70px;
+  flex: 0 0 auto;
+}
+
+.era-head.locked {
+  opacity: 0.55;
+}
+
+.era-head.locked .era-n {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--ink-faint);
+}
+
+.era-head.done .era-n {
+  background: #6fbf73;
+}
+
+.branch-dot {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.tag {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--panel-line);
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+
+.tag.ok {
+  border-color: rgba(111, 191, 115, 0.5);
+  color: #9fe6a0;
+}
+
+.btn.tiny {
+  flex: 0 0 auto;
+  min-height: 28px;
+  padding: 4px 9px;
+  font-size: 11.5px;
+}
+
+.res-card {
+  border-left: 3px solid var(--branch, var(--panel-line));
+  cursor: default;
+}
+
+.res-card.done {
+  opacity: 0.55;
+}
+
+.res-card.running {
+  border-color: rgba(217, 180, 95, 0.5);
+}
+
+.res-card.poor .cost.missing {
+  color: #ffb4a4;
 }
 
 .res-card .effects {
@@ -1119,6 +1248,18 @@ body {
     transform: translateY(0);
   }
 
+  .sheet.full {
+    left: 12px;
+    top: 12px;
+    right: 12px;
+    bottom: 12px;
+    width: auto;
+    max-width: 880px;
+    margin: 0 auto;
+    max-height: none;
+    border-radius: 20px;
+  }
+
   .card-grid {
     grid-template-columns: repeat(auto-fill, minmax(165px, 1fr));
   }
@@ -1370,4 +1511,59 @@ body {
 .card-desc.lead {
   font-size: 12.5px;
   margin-bottom: 4px;
+}
+
+/* ── Tax slider ─────────────────────────────────────────────────────────── */
+.slider-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 8px 0 4px;
+}
+
+.slider {
+  flex: 1;
+  height: 28px;
+  appearance: none;
+  background: transparent;
+}
+
+.slider::-webkit-slider-runnable-track {
+  height: 5px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #6fbf73, var(--gold), #e0705c);
+}
+
+.slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  margin-top: -8px;
+  border-radius: 50%;
+  background: var(--ink);
+  border: 2px solid #1c1814;
+  cursor: pointer;
+}
+
+.slider::-moz-range-track {
+  height: 5px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #6fbf73, var(--gold), #e0705c);
+}
+
+.slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--ink);
+  border: 2px solid #1c1814;
+  cursor: pointer;
+}
+
+.era-recap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 4px;
+  opacity: 0.75;
 }

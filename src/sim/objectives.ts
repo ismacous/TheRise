@@ -7,7 +7,7 @@ export interface Objective {
   title: string;
   hint: string;
   icon: string;
-  reward: { research?: number; gold?: number };
+  reward: { gold: number };
   /** Current progress as [done, target]; used for the bar. */
   progress: (w: World) => [number, number];
 }
@@ -40,7 +40,7 @@ export const OBJECTIVES: Objective[] = [
     '🪓',
     'Ouvrir un camp de bûcherons',
     "Placez-le au milieu des arbres : le rayon de coupe compte plus que la distance au village.",
-    { research: 5 },
+    { gold: 50 },
     (w) => [anyOf(w, ['woodcutter_camp', 'lumber_camp']), 1],
   ),
   obj(
@@ -48,7 +48,7 @@ export const OBJECTIVES: Objective[] = [
     '🪚',
     'Construire une scierie',
     'Les rondins ne servent à rien tels quels. Les planches, si.',
-    { research: 6, gold: 20 },
+    { gold: 80 },
     (w) => [anyOf(w, ['sawmill', 'water_sawmill']), 1],
   ),
   obj(
@@ -56,7 +56,7 @@ export const OBJECTIVES: Objective[] = [
     '🧺',
     'Nourrir le village',
     'Une hutte de cueilleur près des buissons à baies suffit pour commencer.',
-    { research: 6 },
+    { gold: 60 },
     (w) => [anyOf(w, ['gatherer_hut', 'fisher_hut', 'hunter_camp', 'wheat_field']), 1],
   ),
   obj(
@@ -64,14 +64,22 @@ export const OBJECTIVES: Objective[] = [
     '🛖',
     'Loger tout le monde',
     'Un villageois sans lit est un villageois malheureux — et qui ne fondera pas de famille.',
-    { research: 8, gold: 30 },
+    { gold: 110 },
     (w) => [Math.min(w.stats.housingCapacity, w.stats.population + 4), w.stats.population + 4],
+  ),
+  obj(
+    'university',
+    '📚',
+    'Fonder une université',
+    "Aucune étude n'est possible sans elle. Affectez-y des érudits : chacun accélère la recherche.",
+    { gold: 60 },
+    (w) => [countBuildings(w, 'university'), 1],
   ),
   obj(
     'research',
     '📜',
-    'Lancer votre première recherche',
-    "Les points tombent tout seuls. Ouvrez « Savoir » et dépensez-les : rien ne se débloque sans ça.",
+    'Financer votre première étude',
+    "Ouvrez « Savoir » : chaque étude coûte des pièces et s'achève au bout d'un moment. Rien ne se débloque sans ça.",
     { gold: 40 },
     (w) => [w.research.completed.size, 1],
   ),
@@ -80,7 +88,7 @@ export const OBJECTIVES: Objective[] = [
     '🌱',
     'Planter une hutte de forestier',
     'Sans replantation, vos bûcherons finiront par annoncer « aucune ressource à portée ».',
-    { research: 12 },
+    { gold: 120 },
     (w) => [countBuildings(w, 'forester_hut'), 1],
   ),
   obj(
@@ -88,7 +96,7 @@ export const OBJECTIVES: Objective[] = [
     '🏪',
     'Ouvrir un marché',
     'Les foyers viennent y chercher vivres et confort. Sans marché, le bonheur plafonne.',
-    { research: 15, gold: 50 },
+    { gold: 200 },
     (w) => [anyOf(w, ['market', 'grand_market']), 1],
   ),
   obj(
@@ -96,7 +104,7 @@ export const OBJECTIVES: Objective[] = [
     '👥',
     'Atteindre 20 habitants',
     'Plus de bras, plus de métiers possibles.',
-    { research: 20, gold: 60 },
+    { gold: 260 },
     (w) => [w.stats.population, 20],
   ),
   obj(
@@ -104,7 +112,7 @@ export const OBJECTIVES: Objective[] = [
     '🪨',
     'Exploiter la pierre',
     "Cherchez un affleurement rocheux : la carrière se bâtit directement dessus.",
-    { research: 18 },
+    { gold: 180 },
     (w) => [anyOf(w, ['quarry', 'great_quarry']), 1],
   ),
   obj(
@@ -112,7 +120,7 @@ export const OBJECTIVES: Objective[] = [
     '🍞',
     'Faire cuire du pain',
     'Champ → moulin → boulangerie. Trois bâtiments, et la famine appartient au passé.',
-    { research: 30, gold: 80 },
+    { gold: 380 },
     (w) => [Math.min(stock(w, 'bread'), 20), 20],
   ),
   obj(
@@ -120,7 +128,7 @@ export const OBJECTIVES: Objective[] = [
     '⚖️',
     'Ouvrir une route commerciale',
     'Le comptoir de commerce transforme vos surplus en or.',
-    { research: 25, gold: 60 },
+    { gold: 310 },
     (w) => [countBuildings(w, 'trade_post'), 1],
   ),
   obj(
@@ -128,7 +136,7 @@ export const OBJECTIVES: Objective[] = [
     '👕',
     'Habiller vos villageois',
     'Élevage → laine → tissu → vêtements. La première vraie chaîne de confort.',
-    { research: 35, gold: 100 },
+    { gold: 450 },
     (w) => [Math.min(stock(w, 'clothes'), 10), 10],
   ),
   obj(
@@ -136,7 +144,7 @@ export const OBJECTIVES: Objective[] = [
     '⚒️',
     'Couler un lingot de fer',
     'Mine de fer et fonderie. Le fer ouvre les outils, la mer et les grands bâtiments.',
-    { research: 45, gold: 120 },
+    { gold: 570 },
     (w) => [Math.min(stock(w, 'iron_ingot'), 10), 10],
   ),
   obj(
@@ -144,7 +152,7 @@ export const OBJECTIVES: Objective[] = [
     '🏘️',
     'Devenir un gros bourg',
     '60 habitants, 50 % de bonheur et deux services.',
-    { research: 60, gold: 200 },
+    { gold: 800 },
     (w) => [w.stats.population, 60],
   ),
   obj(
@@ -152,7 +160,7 @@ export const OBJECTIVES: Objective[] = [
     '🔨',
     'Forger des outils',
     'Les outils accélèrent tous vos récolteurs. Ils se remboursent en quelques jours.',
-    { research: 50, gold: 150 },
+    { gold: 650 },
     (w) => [Math.min(stock(w, 'tools'), 15), 15],
   ),
   obj(
@@ -160,7 +168,7 @@ export const OBJECTIVES: Objective[] = [
     '💍',
     "Vendre de l'orfèvrerie",
     "Or, fonderie, atelier d'orfèvre. L'objet le plus cher du jeu.",
-    { research: 90, gold: 400 },
+    { gold: 1300 },
     (w) => [Math.min(stock(w, 'jewellery'), 3), 3],
   ),
   obj(
@@ -168,7 +176,7 @@ export const OBJECTIVES: Objective[] = [
     '🏰',
     'Fonder une cité',
     '220 habitants, 60 % de bonheur, cinq services. Le sommet de la vallée.',
-    { research: 150, gold: 800 },
+    { gold: 2300 },
     (w) => [w.stats.tier, 5],
   ),
 ];
@@ -183,14 +191,11 @@ export function updateObjectives(w: World): void {
     const [done, target] = o.progress(w);
     if (done < target) continue;
     w.completedObjectives.add(o.id);
-    if (o.reward.research) w.research.points += o.reward.research;
-    if (o.reward.gold) w.treasury += o.reward.gold;
-    const reward = [
-      o.reward.research ? `${o.reward.research} points` : null,
-      o.reward.gold ? `${o.reward.gold} pièces` : null,
-    ]
-      .filter(Boolean)
-      .join(' et ');
-    w.notify(`Objectif atteint : ${o.title}${reward ? ` (+${reward})` : ''}`, '🏅', 'good');
+    w.treasury += o.reward.gold;
+    w.notify(
+      `Objectif atteint : ${o.title} (+${o.reward.gold} pièces)`,
+      '🏅',
+      'good',
+    );
   }
 }

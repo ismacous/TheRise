@@ -62,7 +62,7 @@ function make(defId: BuildingId, state: BuildingState): BuildingVisual {
     case 'town_hall':
       out.height = buildTownHall(b, W, D, out);
       break;
-    case 'scholars_hall':
+    case 'university':
       out.height = buildHall(b, W, D, C.wallPlaster, C.roofSlate, out, 1.15);
       break;
 

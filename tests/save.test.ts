@@ -43,8 +43,9 @@ function playedGame() {
   place(w, 'sawmill');
   place(w, 'shack');
   place(w, 'shack');
-  w.research.points = 200;
-  startResearch(w, 'r_shelter');
+  place(w, 'university');
+  w.treasury = 2000;
+  startResearch(w, 'r_forestry');
   // Paint a stretch of road so the sparse road layer is exercised.
   w.research.completed.add('r_paths');
   for (let i = 0; i < 12; i++) w.place('dirt_path', Math.floor(w.startX) + i, Math.floor(w.startY) + 6);

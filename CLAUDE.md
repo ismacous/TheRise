@@ -45,8 +45,10 @@ est facile de le faire remonter.** Les pièges connus :
   le calcul dans le temps ;
 - appeler le pathfinding sans plafond.
 
-En page, `window.theRise` expose `game`, `BUILDINGS`, `RESEARCH`, `GOODS` et
-`createVillager` : de quoi piloter une partie depuis la console ou un script.
+En page, `window.theRise` expose `game`, `BUILDINGS`, `RESEARCH`, `GOODS`,
+`createVillager` et `workerSlots` : de quoi piloter une partie depuis la
+console ou un script. L'affectation étant manuelle, un script qui pose des
+bâtiments doit aussi appeler `world.assignWorker(b.id)`, sinon rien ne tourne.
 
 ## APK
 

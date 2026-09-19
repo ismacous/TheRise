@@ -8,11 +8,21 @@ import {
 } from '../data/buildings';
 import { GOODS, type GoodId } from '../data/goods';
 import { PROFESSIONS } from '../data/professions';
-import { BRANCH_LABELS, RESEARCH, type ResearchBranch, type ResearchId } from '../data/research';
+import {
+  BRANCH_LABELS,
+  MAX_TIER,
+  RESEARCH,
+  researchOfTier,
+  TIER_NAMES as ERA_NAMES,
+  type ResearchBranch,
+  type ResearchDef,
+} from '../data/research';
 import { PARTNER_KIND_LABEL, TRADE_PARTNERS } from '../data/trade';
 import {
   availablePartners,
   buyPrice,
+  taxHappiness,
+  taxIncome,
   hasTradePost,
   orderBuy,
   orderSell,
@@ -30,7 +40,19 @@ import {
   workerSlots,
 } from '../sim/levels';
 import { activeRecipe, recipeOptions, setRecipe } from '../sim/recipes';
-import { availableResearch, canStartResearch, cancelResearch, researchRate, startResearch } from '../sim/research';
+import {
+  canQueueResearch,
+  canStartResearch,
+  hasUniversity,
+  cancelResearch,
+  dequeueResearch,
+  researchSpeed,
+  scholarCount,
+  startResearch,
+  tierProgress,
+  universities,
+  unlockedTier,
+} from '../sim/research';
 import { fullName } from '../sim/villagers';
 import type { Building, Villager } from '../sim/types';
 import type { GameApi, SheetId } from './api';
@@ -43,11 +65,13 @@ export function sheetTitle(id: SheetId, api: GameApi): { title: string; sub?: st
   switch (id) {
     case 'build':
       return { title: 'Construire', sub: 'Posez vos bâtiments sur la carte' };
-    case 'research':
+    case 'research': {
+      const era = unlockedTier(w);
       return {
         title: 'Savoir',
-        sub: `${Math.floor(w.research.points)} points · +${researchRate(w).toFixed(2)}/s`,
+        sub: `Ère ${era} · ${ERA_NAMES[era] ?? ''} · ${w.research.completed.size}/${Object.keys(RESEARCH).length} étudiés`,
       };
+    }
     case 'trade':
       return { title: 'Commerce', sub: `${Math.round(w.treasury)} pièces en caisse` };
     case 'people':
@@ -259,7 +283,7 @@ export function iconFor(id: BuildingId): string {
     trade_post: '⚖️',
     chapel: '⛪',
     tavern: '🍻',
-    scholars_hall: '📚',
+    university: '📚',
     well: '🪣',
     firewatch: '🚒',
     healer_hut: '🌿',
@@ -273,20 +297,58 @@ export function iconFor(id: BuildingId): string {
 
 function renderResearch(api: GameApi, body: HTMLElement, refresh: Refresh): void {
   const w = api.world;
+  const speed = researchSpeed(w);
+  const open = unlockedTier(w);
 
-  if (w.research.active) {
-    const def = RESEARCH[w.research.active];
-    const progress = w.research.progress / def.duration;
-    const card = el('div', { class: 'research-active' }, [
-      el('div', { class: 'card-title' }, [
-        el('span', { class: 'ic', text: def.icon }),
-        el('span', { text: `En cours : ${def.name}` }),
-      ]),
+  // ── Status strip ─────────────────────────────────────────────────────────
+  const halls = universities(w);
+  if (halls.length === 0) {
+    const call = el('div', { class: 'research-warn' }, [
+      el('div', { class: 'card-title' }, [el('span', { text: "Aucune université" })]),
       el('div', {
         class: 'card-desc',
-        text: `Encore ${formatDuration((def.duration - w.research.progress) / Math.max(0.25, api.speed))}`,
+        text: "Le savoir ne vient pas tout seul. Construisez une université et affectez-y des érudits : chaque érudit accélère l'étude en cours.",
       }),
-      bar(progress),
+    ]);
+    const build = el('button', { class: 'btn primary', text: 'Construire une université' });
+    onTap(build, () => {
+      api.beginPlacement('university');
+      api.closeSheet();
+    });
+    call.append(el('div', { class: 'btn-row' }, [build]));
+    body.append(call);
+  } else {
+    const scholars = scholarCount(w);
+    const slots = halls.reduce((n, b) => n + workerSlots(b), 0);
+    body.append(
+      el('div', { class: 'research-status' }, [
+        statChip('Érudits', `${scholars}/${slots}`),
+        statChip('Vitesse', `×${speed.toFixed(2)}`),
+        statChip('Trésor', `${Math.round(w.treasury)} pièces`),
+      ]),
+    );
+    if (scholars === 0) {
+      body.append(
+        el('div', {
+          class: 'empty-note',
+          text: "Votre université est vide. Touchez-la sur la carte pour y affecter des érudits : l'étude avance trois fois plus vite avec trois d'entre eux.",
+        }),
+      );
+    }
+  }
+
+  // ── Active study ─────────────────────────────────────────────────────────
+  if (w.research.active) {
+    const def = RESEARCH[w.research.active];
+    const left = def.duration - w.research.progress;
+    const eta = speed > 0 ? left / (speed * Math.max(0.25, api.speed)) : Infinity;
+    const card = el('div', { class: 'research-active' }, [
+      el('div', { class: 'card-title' }, [el('span', { text: `En cours : ${def.name}` })]),
+      el('div', {
+        class: 'card-desc',
+        text: speed > 0 ? `Encore ${formatDuration(eta)}` : "À l'arrêt : plus aucune université en service",
+      }),
+      bar(w.research.progress / def.duration),
     ]);
     const cancel = el('button', { class: 'btn danger', text: 'Abandonner (80 % remboursés)' });
     onTap(cancel, () => {
@@ -295,104 +357,159 @@ function renderResearch(api: GameApi, body: HTMLElement, refresh: Refresh): void
     });
     card.append(el('div', { class: 'btn-row' }, [cancel]));
     body.append(card);
-  } else {
-    body.append(
-      el('div', {
-        class: 'empty-note',
-        text: 'Aucune recherche en cours. Choisissez un sujet ci-dessous : les points sont dépensés au lancement, puis l’étude prend du temps.',
-      }),
-    );
   }
 
+  // ── Queue ────────────────────────────────────────────────────────────────
   if (w.research.queue.length > 0) {
     body.append(el('div', { class: 'section-title', text: "File d'attente" }));
     for (const id of w.research.queue) {
       const def = RESEARCH[id];
-      const row = el('div', { class: 'offer-row' }, [
-        el('span', { text: def.icon }),
-        el('span', { class: 'grow', text: def.name }),
-        el('span', { class: 'qty', text: `${def.cost} pts` }),
-      ]);
-      body.append(row);
+      const drop = el('button', { class: 'btn tiny', text: 'Retirer' });
+      onTap(drop, () => {
+        dequeueResearch(w, id);
+        refresh();
+      });
+      body.append(
+        el('div', { class: 'offer-row' }, [
+          branchDot(def.branch),
+          el('span', { class: 'grow', text: def.name }),
+          el('span', { class: 'qty', text: `${def.cost} pièces` }),
+          drop,
+        ]),
+      );
     }
   }
 
-  const available = new Set(availableResearch(w));
-  const branches: ResearchBranch[] = ['survival', 'forest', 'stone', 'farm', 'craft', 'city'];
-
-  for (const branch of branches) {
-    const ids = (Object.keys(RESEARCH) as ResearchId[]).filter((id) => RESEARCH[id].branch === branch);
-    const doneCount = ids.filter((id) => w.research.completed.has(id)).length;
-    const label = BRANCH_LABELS[branch];
-    body.append(
-      el('div', { class: 'branch-head' }, [
-        el('span', { text: label.icon }),
-        el('span', { text: label.name }),
-        el('span', { class: 'line' }),
-        el('span', { class: 'sub', text: `${doneCount}/${ids.length}` }),
+  // ── The tree, one era at a time ──────────────────────────────────────────
+  for (let tier = 1; tier <= MAX_TIER; tier++) {
+    const [done, total] = tierProgress(w, tier);
+    const locked = tier > open;
+    const head = el('div', { class: `era-head ${locked ? 'locked' : ''} ${done === total ? 'done' : ''}` }, [
+      el('span', { class: 'era-n', text: String(tier) }),
+      el('span', { class: 'grow' }, [
+        el('div', { class: 'era-name', text: ERA_NAMES[tier] ?? `Ère ${tier}` }),
+        el('div', {
+          class: 'era-sub',
+          text: locked ? `Terminez l'ère ${tier - 1} pour l'ouvrir` : `${done}/${total} acquises`,
+        }),
       ]),
-    );
+    ]);
+    head.append(bar(total > 0 ? done / total : 0));
+    body.append(head);
+
+    if (locked) continue;
+
+    const defs = researchOfTier(tier).sort((a, b) => a.cost - b.cost);
+    // A finished era collapses to a row of names: it is history, and the
+    // player still has four more to scroll past.
+    if (done === total) {
+      const recap = el('div', { class: 'effects era-recap' });
+      for (const def of defs) {
+        recap.append(
+          el('span', { class: 'effect', style: `border-color:${BRANCH_LABELS[def.branch].color}` }, [
+            el('span', { text: def.name }),
+          ]),
+        );
+      }
+      body.append(recap);
+      continue;
+    }
 
     const grid = el('div', { class: 'card-grid' });
-    ids.sort((a, b) => RESEARCH[a].cost - RESEARCH[b].cost);
-    for (const id of ids) {
-      const def = RESEARCH[id];
-      const done = w.research.completed.has(id);
-      const ready = available.has(id);
-      if (done) continue;
-      // Hide topics whose prerequisites are two steps away to avoid noise.
-      if (!ready && !def.requires.some((r) => w.research.completed.has(r)) && def.requires.length > 0) {
-        continue;
-      }
-      const check = canStartResearch(w, id);
-      const card = el('div', {
-        class: `card res-card ${ready ? '' : 'locked'} ${check.ok ? 'affordable' : ''}`,
-      });
-      card.append(
-        el('div', { class: 'card-title' }, [
-          el('span', { class: 'ic', text: def.icon }),
-          el('span', { text: def.name }),
-        ]),
-        el('div', { class: 'card-desc', text: def.desc }),
-      );
-      const meta = el('div', { class: 'cost-row' }, [
-        el('span', { class: `cost ${w.research.points < def.cost ? 'missing' : ''}` }, [
-          el('span', { text: `📜 ${def.cost}` }),
-        ]),
-        el('span', { class: 'cost' }, [el('span', { text: `⏳ ${formatDuration(def.duration)}` })]),
-      ]);
-      card.append(meta);
-
-      if (def.unlocks.length > 0) {
-        const effects = el('div', { class: 'effects' });
-        for (const b of def.unlocks) {
-          effects.append(el('span', { class: 'effect', text: `${iconFor(b)} ${BUILDINGS[b].name}` }));
-        }
-        card.append(effects);
-      }
-      if (def.effects.length > 0) {
-        const effects = el('div', { class: 'effects' });
-        for (const e of def.effects) effects.append(el('span', { class: 'effect', text: describeEffect(e) }));
-        card.append(effects);
-      }
-      if (!ready) {
-        const missing = def.requires.filter((r) => !w.research.completed.has(r));
-        card.append(
-          el('div', {
-            class: 'card-desc',
-            text: `🔒 ${missing.map((m) => RESEARCH[m].name).join(', ')}`,
-          }),
-        );
-      } else {
-        onTap(card, () => {
-          if (startResearch(w, id)) refresh();
-        });
-        if (!check.ok) card.append(el('div', { class: 'card-desc', text: check.reason }));
-      }
-      grid.append(card);
-    }
+    for (const def of defs) grid.append(researchCard(api, def, refresh));
     body.append(grid);
   }
+}
+
+function statChip(label: string, value: string): HTMLElement {
+  return el('div', { class: 'stat-chip' }, [
+    el('span', { class: 'k', text: label }),
+    el('span', { class: 'v', text: value }),
+  ]);
+}
+
+function branchDot(branch: ResearchBranch): HTMLElement {
+  const label = BRANCH_LABELS[branch];
+  return el('span', {
+    class: 'branch-dot',
+    style: `background:${label.color}`,
+    title: label.name,
+  });
+}
+
+function researchCard(api: GameApi, def: ResearchDef, refresh: Refresh): HTMLElement {
+  const w = api.world;
+  const done = w.research.completed.has(def.id);
+  const active = w.research.active === def.id;
+  const queued = w.research.queue.includes(def.id);
+  const check = canStartResearch(w, def.id);
+  const poor = !done && !active && !queued && w.treasury < def.cost;
+
+  const card = el('div', {
+    class: `card res-card ${done ? 'done' : ''} ${active ? 'running' : ''} ${poor ? 'poor' : ''}`,
+    style: `--branch:${BRANCH_LABELS[def.branch].color}`,
+  });
+  card.append(
+    el('div', { class: 'card-title' }, [
+      branchDot(def.branch),
+      el('span', { class: 'grow', text: def.name }),
+      done ? el('span', { class: 'tag ok', text: 'Acquis' }) : el('span', { class: 'tag', text: BRANCH_LABELS[def.branch].name }),
+    ]),
+    el('div', { class: 'card-desc', text: def.desc }),
+  );
+
+  if (!done) {
+    card.append(
+      el('div', { class: 'cost-row' }, [
+        el('span', { class: `cost ${poor ? 'missing' : ''}` }, [el('span', { text: `${def.cost} pièces` })]),
+        el('span', { class: 'cost' }, [el('span', { text: formatDuration(def.duration) })]),
+      ]),
+    );
+  }
+
+  if (def.unlocks.length > 0) {
+    const effects = el('div', { class: 'effects' });
+    for (const b of def.unlocks) effects.append(el('span', { class: 'effect', text: BUILDINGS[b].name }));
+    card.append(effects);
+  }
+  if (def.effects.length > 0) {
+    const effects = el('div', { class: 'effects' });
+    for (const e of def.effects) effects.append(el('span', { class: 'effect', text: describeEffect(e) }));
+    card.append(effects);
+  }
+
+  if (done) return card;
+  if (active) {
+    card.append(el('div', { class: 'card-desc', text: 'Étude en cours' }));
+    return card;
+  }
+  if (queued) {
+    const drop = el('button', { class: 'btn tiny', text: 'Retirer de la file' });
+    onTap(drop, () => {
+      dequeueResearch(w, def.id);
+      refresh();
+    });
+    card.append(el('div', { class: 'btn-row' }, [drop]));
+    return card;
+  }
+
+  // One line, one meaning: the button says exactly what tapping it does, so
+  // the refusal never has to be repeated underneath.
+  const busy = w.research.active !== null;
+  const canAct = hasUniversity(w) && canQueueResearch(w, def.id);
+  let label: string;
+  if (!hasUniversity(w)) label = 'Université requise';
+  else if (busy) label = "Mettre en file d'attente";
+  else if (poor) label = `Attendre ${Math.ceil(def.cost - w.treasury)} pièces`;
+  else label = `Étudier · ${def.cost}`;
+
+  const go = el('button', { class: `btn ${check.ok && !busy ? 'primary' : ''}`, text: label });
+  if (!canAct) go.setAttribute('disabled', 'true');
+  onTap(go, () => {
+    if (startResearch(w, def.id)) refresh();
+  });
+  card.append(el('div', { class: 'btn-row' }, [go]));
+  return card;
 }
 
 function describeEffect(e: { kind: string } & Record<string, unknown>): string {
@@ -400,34 +517,34 @@ function describeEffect(e: { kind: string } & Record<string, unknown>): string {
   switch (e.kind) {
     case 'work_speed': {
       const prof = e.profession ? PROFESSIONS[e.profession as keyof typeof PROFESSIONS] : undefined;
-      return `⚡ Travail ${pct(e.mul as number)}${prof ? ` (${prof.name})` : ''}`;
+      return `Travail ${pct(e.mul as number)}${prof ? ` (${prof.name})` : ''}`;
     }
     case 'gather_yield':
-      return `📈 Rendement ${pct(e.mul as number)}`;
+      return `Rendement ${pct(e.mul as number)}`;
     case 'craft_yield':
-      return `📈 Production ${pct(e.mul as number)}`;
+      return `Production ${pct(e.mul as number)}`;
     case 'move_speed':
-      return `👟 Déplacement ${pct(e.mul as number)}`;
+      return `Déplacement ${pct(e.mul as number)}`;
     case 'carry_capacity':
-      return `🎒 Portage ${pct(e.mul as number)}`;
+      return `Portage ${pct(e.mul as number)}`;
     case 'happiness':
-      return `😊 Bonheur +${e.add}`;
+      return `Bonheur +${e.add}`;
     case 'food_upkeep':
-      return `🍞 Consommation ${pct(e.mul as number)}`;
+      return `Consommation ${pct(e.mul as number)}`;
     case 'trade_tier':
-      return `🐎 Route de commerce ${e.value}`;
+      return `Route de commerce ${e.value}`;
     case 'deposit_richness':
-      return `⛏️ Filons ${pct(e.mul as number)}`;
+      return `Filons ${pct(e.mul as number)}`;
     case 'research_rate':
-      return `📜 Recherche ${pct(e.mul as number)}`;
+      return `Recherche ${pct(e.mul as number)}`;
     case 'fire_risk':
-      return `🔥 Risque d'incendie ${pct(e.mul as number)}`;
+      return `Risque d'incendie ${pct(e.mul as number)}`;
     case 'disease_resist':
-      return `🌿 Maladies ${pct(e.mul as number)}`;
+      return `Maladies ${pct(e.mul as number)}`;
     case 'build_speed':
-      return `🏗️ Chantiers ${pct(e.mul as number)}`;
+      return `Chantiers ${pct(e.mul as number)}`;
     case 'storage':
-      return `📦 Stockage ${pct(e.mul as number)}`;
+      return `Stockage ${pct(e.mul as number)}`;
     default:
       return '';
   }
@@ -688,7 +805,7 @@ function renderVillage(api: GameApi, body: HTMLElement, refresh: Refresh): void 
     ['Bonheur', `${Math.round(s.happiness)}%`, happinessHint(s.happiness)],
     ['Vivres', `${s.foodDays.toFixed(1)} j`, `${formatNumber(s.foodStock)} de nutrition`],
     ['Trésor', formatNumber(w.treasury), `${s.goldPerMinute >= 0 ? '+' : ''}${formatNumber(s.goldPerMinute)}/min`],
-    ['Recherche', formatNumber(w.research.points), `+${researchRate(w).toFixed(2)}/s`],
+    ['Savoir', `${w.research.completed.size} études`, `${scholarCount(w)} érudit(s) · ×${researchSpeed(w).toFixed(2)}`],
     ['Bâtiments', String(w.buildingList.filter((b) => b.state === 'active').length), `${w.buildingList.filter((b) => b.state === 'building' || b.state === 'planned').length} en chantier`],
   ];
   for (const [k, v, sub] of rows) {
@@ -710,12 +827,7 @@ function renderVillage(api: GameApi, body: HTMLElement, refresh: Refresh): void 
     );
     for (const o of objectives) {
       const [done, target] = o.progress(w);
-      const reward = [
-        o.reward.research ? `📜 ${o.reward.research}` : null,
-        o.reward.gold ? `🪙 ${o.reward.gold}` : null,
-      ]
-        .filter(Boolean)
-        .join('  ');
+      const reward = `🪙 ${o.reward.gold}`;
       body.append(
         el('div', { class: 'objective-card' }, [
           el('div', { class: 'card-title' }, [
@@ -924,6 +1036,48 @@ function productionSummary(api: GameApi): ProdLine[] {
 
 // ── Selected building ──────────────────────────────────────────────────────
 
+/** Tax rate and the money it brings in — the town hall's own business. */
+function renderTreasury(api: GameApi, body: HTMLElement, refresh: Refresh): void {
+  const w = api.world;
+  const perMinute = taxIncome(w) * 60;
+  const swing = taxHappiness(w);
+
+  body.append(el('div', { class: 'section-title', text: 'Impôts' }));
+  body.append(
+    el('div', { class: 'research-status' }, [
+      statChip('Trésor', `${Math.round(w.treasury)}`),
+      statChip('Impôts', `+${perMinute.toFixed(1)}/min`),
+      statChip('Humeur', `${swing >= 0 ? '+' : ''}${Math.round(swing)} bonheur`),
+    ]),
+  );
+
+  const slider = el('input', { class: 'slider', type: 'range', min: '0', max: '100', step: '5' }) as HTMLInputElement;
+  slider.value = String(Math.round(w.taxRate * 100));
+  const readout = el('div', { class: 'card-desc', text: taxHint(w.taxRate) });
+  slider.addEventListener('input', () => {
+    w.taxRate = Number(slider.value) / 100;
+    readout.textContent = taxHint(w.taxRate);
+  });
+  slider.addEventListener('change', () => refresh());
+  body.append(
+    el('div', { class: 'slider-row' }, [
+      el('span', { class: 'qty', text: '0 %' }),
+      slider,
+      el('span', { class: 'qty', text: '100 %' }),
+    ]),
+    readout,
+  );
+}
+
+function taxHint(rate: number): string {
+  const pct = Math.round(rate * 100);
+  if (rate <= 0.2) return `${pct} % — les villageois vous adorent et la caisse se vide.`;
+  if (rate <= 0.45) return `${pct} % — clément : un peu de marge, beaucoup de sourires.`;
+  if (rate <= 0.6) return `${pct} % — le taux d'équilibre : personne ne s'en plaint vraiment.`;
+  if (rate <= 0.8) return `${pct} % — lourd. Le bonheur baisse, la recherche avance.`;
+  return `${pct} % — confiscatoire. Attendez-vous à des départs.`;
+}
+
 function renderBuilding(api: GameApi, body: HTMLElement, refresh: Refresh): void {
   const w = api.world;
   const b = api.selectedBuildingId ? w.buildings.get(api.selectedBuildingId) : null;
@@ -937,6 +1091,9 @@ function renderBuilding(api: GameApi, body: HTMLElement, refresh: Refresh): void
   // The sheet header already names the building; repeating it wastes a third
   // of a phone screen.
   body.append(el('div', { class: 'card-desc lead', text: def.desc }));
+
+  // The town hall is where the village's money is decided.
+  if (b.def === 'town_hall') renderTreasury(api, body, refresh);
 
   // ── Construction ────────────────────────────────────────────────────────
   if (b.state === 'planned' || b.state === 'building') {

@@ -32,11 +32,11 @@ export interface SaveData {
   weather: string;
   weatherTimer: number;
   treasury: number;
+  taxRate: number;
   comfortPool: number;
   eventCooldown: number;
   objectives: string[];
   research: {
-    points: number;
     completed: ResearchId[];
     active: ResearchId | null;
     progress: number;
@@ -87,11 +87,11 @@ export function serialize(sim: Simulation, gen: Partial<WorldGenOptions>): SaveD
     weather: w.weather,
     weatherTimer: w.weatherTimer,
     treasury: w.treasury,
+    taxRate: w.taxRate,
     comfortPool: w.comfortPool,
     eventCooldown: w.eventCooldown,
     objectives: [...w.completedObjectives],
     research: {
-      points: w.research.points,
       completed: [...w.research.completed],
       active: w.research.active,
       progress: w.research.progress,
@@ -199,10 +199,10 @@ export function deserialize(data: SaveData): Simulation {
   w.weather = data.weather as never;
   w.weatherTimer = data.weatherTimer;
   w.treasury = data.treasury;
+  w.taxRate = data.taxRate ?? 0.5;
   w.comfortPool = data.comfortPool ?? 0;
   w.eventCooldown = data.eventCooldown ?? 200;
   w.completedObjectives = new Set(data.objectives ?? []);
-  w.research.points = data.research.points;
   w.research.completed = new Set(data.research.completed);
   w.research.active = data.research.active;
   w.research.progress = data.research.progress;

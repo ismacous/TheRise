@@ -1,15 +1,43 @@
 import { describe, expect, it } from 'vitest';
 import { createNewGame, computeStats } from '../src/sim/simulation';
 import { BUILDINGS } from '../src/data/buildings';
-import { startResearch } from '../src/sim/research';
+import {
+  canStartResearch,
+  scholarCount,
+  startResearch,
+  unlockedTier,
+} from '../src/sim/research';
 import { orderBuy, orderSell } from '../src/sim/economy';
 import { GOODS, ALL_GOOD_IDS } from '../src/data/goods';
 import { workerSlots } from '../src/sim/levels';
-import { RESEARCH, ALL_RESEARCH_IDS } from '../src/data/research';
+import {
+  ALL_RESEARCH_IDS,
+  MAX_TIER,
+  RESEARCH,
+  researchOfTier,
+  TIER_NAMES,
+} from '../src/data/research';
+import type { BuildingId } from '../src/data/buildings';
+import type { World } from '../src/sim/world';
 
 function run(sim: ReturnType<typeof createNewGame>, seconds: number): void {
   const steps = Math.round(seconds / 0.1);
   for (let i = 0; i < steps; i++) sim.tick(0.1);
+}
+
+/** Drops a finished building on the first legal spot spiralling out of town. */
+function placeNearStart(w: World, def: BuildingId) {
+  for (let r = 3; r < 60; r++) {
+    for (let a = 0; a < 48; a++) {
+      const ang = (a / 48) * Math.PI * 2;
+      const x = Math.round(w.startX + Math.cos(ang) * r);
+      const y = Math.round(w.startY + Math.sin(ang) * r);
+      if (!w.canPlace(def, x, y).ok) continue;
+      const b = w.place(def, x, y, 0, true);
+      if (b) return b;
+    }
+  }
+  return null;
 }
 
 describe('world generation', () => {
@@ -36,22 +64,56 @@ describe('world generation', () => {
 });
 
 describe('data integrity', () => {
-  it('every research prerequisite exists and is acyclic', () => {
+  it('never unlocks a building before the era that supplies its inputs', () => {
+    // A study's era must be at least that of every research its unlocked
+    // buildings depend on through their recipe inputs. Half a chain is worse
+    // than none: it strands a workshop with nothing to work on.
+    const eraOfGood = new Map<string, number>();
     for (const id of ALL_RESEARCH_IDS) {
-      for (const req of RESEARCH[id].requires) {
-        expect(RESEARCH[req], `${id} requires missing ${req}`).toBeTruthy();
+      for (const bid of RESEARCH[id].unlocks) {
+        for (const r of BUILDINGS[bid].recipes ?? (BUILDINGS[bid].recipe ? [BUILDINGS[bid].recipe!] : [])) {
+          for (const g of Object.keys(r.outputs)) {
+            eraOfGood.set(g, Math.min(eraOfGood.get(g) ?? 99, RESEARCH[id].tier));
+          }
+        }
+        for (const g of Object.keys(BUILDINGS[bid].gather?.outputs ?? {})) {
+          eraOfGood.set(g, Math.min(eraOfGood.get(g) ?? 99, RESEARCH[id].tier));
+        }
       }
     }
-    // Topological sort must succeed.
-    const done = new Set<string>();
-    let guard = 0;
-    while (done.size < ALL_RESEARCH_IDS.length && guard++ < 200) {
-      for (const id of ALL_RESEARCH_IDS) {
-        if (done.has(id)) continue;
-        if (RESEARCH[id].requires.every((r) => done.has(r))) done.add(id);
+    // Starting buildings need no research at all.
+    for (const def of Object.values(BUILDINGS)) {
+      if (def.requires) continue;
+      for (const r of def.recipes ?? (def.recipe ? [def.recipe] : [])) {
+        for (const g of Object.keys(r.outputs)) eraOfGood.set(g, 0);
+      }
+      for (const g of Object.keys(def.gather?.outputs ?? {})) eraOfGood.set(g, 0);
+    }
+
+    // A workshop with several recipes only needs one of them usable on day
+    // one; the weaver may well wait for flax to reach the fifth era.
+    for (const id of ALL_RESEARCH_IDS) {
+      const tier = RESEARCH[id].tier;
+      for (const bid of RESEARCH[id].unlocks) {
+        const recipes = BUILDINGS[bid].recipes ?? (BUILDINGS[bid].recipe ? [BUILDINGS[bid].recipe!] : []);
+        if (recipes.length === 0) continue;
+        const usable = recipes.filter((r) =>
+          Object.keys(r.inputs).every((g) => (eraOfGood.get(g) ?? 99) <= tier),
+        );
+        expect(
+          usable.length,
+          `${bid} (era ${tier}) has no recipe whose inputs exist yet`,
+        ).toBeGreaterThan(0);
       }
     }
-    expect(done.size).toBe(ALL_RESEARCH_IDS.length);
+  });
+
+  it('spreads every era over several branches', () => {
+    for (let tier = 1; tier <= MAX_TIER; tier++) {
+      const defs = researchOfTier(tier);
+      expect(defs.length, `era ${tier} is empty`).toBeGreaterThan(2);
+      expect(TIER_NAMES[tier], `era ${tier} has no name`).toBeTruthy();
+    }
   });
 
   it('every building cost and recipe references a real good', () => {
@@ -132,15 +194,37 @@ describe('early game loop', () => {
     expect(w.time.day).toBeGreaterThan(1);
   });
 
-  it('accumulates research points and completes a topic', () => {
+  it('refuses to study without a university, then completes a topic', () => {
     const sim = createNewGame({ seed: 'research' });
     const w = sim.world;
     run(sim, 120);
-    w.research.points = 100;
-    expect(startResearch(w, 'r_shelter')).toBe(true);
-    run(sim, 60);
-    expect(w.research.completed.has('r_shelter')).toBe(true);
-    expect(w.modifiers.buildSpeed).toBeGreaterThan(1);
+    w.treasury = 5000;
+    // No university yet: the tree is out of reach.
+    expect(canStartResearch(w, 'r_paths').ok).toBe(false);
+
+    const hall = placeNearStart(w, 'university');
+    expect(hall).toBeTruthy();
+    while (hall!.workers.length < workerSlots(hall!) && w.assignWorker(hall!.id)) { /* staff it */ }
+    expect(scholarCount(w)).toBeGreaterThan(0);
+
+    const before = w.treasury;
+    expect(startResearch(w, 'r_paths')).toBe(true);
+    expect(w.treasury).toBeLessThan(before);
+    run(sim, 120);
+    expect(w.research.completed.has('r_paths')).toBe(true);
+  });
+
+  it('keeps a later era locked until the current one is finished', () => {
+    const sim = createNewGame({ seed: 'eras' });
+    const w = sim.world;
+    w.treasury = 100000;
+    const hall = placeNearStart(w, 'university');
+    while (hall!.workers.length < workerSlots(hall!) && w.assignWorker(hall!.id)) { /* staff it */ }
+    expect(unlockedTier(w)).toBe(1);
+    expect(canStartResearch(w, 'r_agriculture').ok).toBe(false);
+    for (const d of researchOfTier(1)) w.research.completed.add(d.id);
+    expect(unlockedTier(w)).toBe(2);
+    expect(canStartResearch(w, 'r_agriculture').ok).toBe(true);
   });
 });
 

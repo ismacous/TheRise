@@ -159,7 +159,7 @@ export type BuildingId =
   | 'trade_post'
   | 'chapel'
   | 'tavern'
-  | 'scholars_hall'
+  | 'university'
   | 'well'
   | 'firewatch'
   | 'healer_hut'
@@ -182,7 +182,6 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     profession: 'carrier',
     placement: { kind: 'land' },
     storage: { capacity: 400, global: true },
-    service: { kind: 'research', radius: 0, strength: 1 },
     tier: 1,
     fireRisk: 0.3,
     desc: "Le cœur du village. Abrite les premières réserves et attire les nouveaux venus.",
@@ -880,7 +879,7 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     workers: 2,
     profession: 'butcher',
     placement: { kind: 'land' },
-    requires: 'r_butchery',
+    requires: 'r_hunting',
     recipe: { inputs: { game: 1 }, outputs: { meat: 3, hide: 1 }, work: 9 },
     storage: { capacity: 60, accepts: ['game', 'meat', 'hide'] },
     tier: 1,
@@ -934,7 +933,7 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     workers: 2,
     profession: 'baker',
     placement: { kind: 'land' },
-    requires: 'r_baking',
+    requires: 'r_milling',
     recipe: { inputs: { flour: 2, charcoal: 1 }, outputs: { bread: 5 }, work: 11 },
     storage: { capacity: 70, accepts: ['flour', 'charcoal', 'coal', 'bread'] },
     tier: 1,
@@ -992,7 +991,7 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     workers: 2,
     profession: 'tailor',
     placement: { kind: 'land' },
-    requires: 'r_tailoring',
+    requires: 'r_weaving',
     recipe: { inputs: { cloth: 2, feathers: 1 }, outputs: { clothes: 2 }, work: 15 },
     storage: { capacity: 50, accepts: ['cloth', 'feathers', 'clothes'] },
     tier: 1,
@@ -1028,7 +1027,7 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     workers: 2,
     profession: 'cobbler',
     placement: { kind: 'land' },
-    requires: 'r_cobbling',
+    requires: 'r_tanning',
     recipe: { inputs: { leather: 2 }, outputs: { boots: 2 }, work: 14 },
     storage: { capacity: 50, accepts: ['leather', 'boots'] },
     tier: 1,
@@ -1174,30 +1173,29 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     workers: 2,
     profession: 'innkeeper',
     placement: { kind: 'land' },
-    requires: 'r_tavern',
+    requires: 'r_brewing',
     service: { kind: 'tavern', radius: 24, strength: 1 },
     storage: { capacity: 80, accepts: ['ale', 'bread', 'meat'] },
     tier: 1,
     fireRisk: 1.6,
     desc: "Consomme de la bière et rend le bonheur. Elle rapporte aussi un peu d'or.",
   }),
-  scholars_hall: b({
-    id: 'scholars_hall',
-    name: 'Maison des érudits',
+  university: b({
+    id: 'university',
+    name: 'Université',
     category: 'civic',
     size: [3, 3],
-    cost: { planks: 26, stone: 20 },
-    goldCost: 130,
-    buildWork: 150,
+    cost: { planks: 18, stone: 10 },
+    goldCost: 60,
+    buildWork: 130,
     workers: 3,
     profession: 'scholar',
     placement: { kind: 'land' },
-    requires: 'r_scholarship',
     service: { kind: 'research', radius: 0, strength: 3 },
     storage: { capacity: 40, accepts: ['candles'] },
     tier: 1,
     fireRisk: 1.0,
-    desc: "Accélère fortement la recherche. C'est ici qu'on décide de l'avenir du village.",
+    desc: "Sans elle, aucune étude n'est possible. Chaque érudit affecté accélère la recherche ; les chandelles permettent de travailler la nuit.",
   }),
   well: b({
     id: 'well',

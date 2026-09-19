@@ -5,6 +5,11 @@ import { DAY_SECONDS } from './world';
 import type { TradeContract } from './types';
 import type { World } from './world';
 
+/** Coin a single adult contributes per day at the neutral rate, full morale. */
+const TAX_PER_ADULT_PER_DAY = 2.2;
+/** Happiness swing between a tax-free village and a confiscatory one. */
+const TAX_HAPPINESS_SWING = 26;
+
 let nextContractId = 1;
 
 export interface PartnerRuntime {
@@ -192,12 +197,27 @@ export function updateEconomy(world: World, dt: number): void {
   }
 
   // ── Daily taxes ─────────────────────────────────────────────────────────
-  // Roughly one coin per adult per day at decent morale, scaled by prestige.
-  const taxPerSecond =
-    (world.stats.adults * 1.1 * (0.3 + world.stats.happiness / 100) * (1 + (world.stats.tier - 1) * 0.18)) /
-    DAY_SECONDS;
-  world.treasury += taxPerSecond * dt;
-  world.taxIncomeWindow += taxPerSecond * dt;
+  // A couple of coins per adult per day at the neutral rate and decent morale,
+  // scaled by prestige. This is what pays for research, so the whole tree is
+  // balanced against it.
+  const taxes = taxIncome(world) * dt;
+  world.treasury += taxes;
+  world.taxIncomeWindow += taxes;
+}
+
+/** Coin per second the village collects at its current rate and morale. */
+export function taxIncome(world: World): number {
+  const prestige = 1 + (world.stats.tier - 1) * 0.18;
+  const morale = 0.5 + world.stats.happiness / 100;
+  return (world.stats.adults * TAX_PER_ADULT_PER_DAY * world.taxRate * 2 * morale * prestige) / DAY_SECONDS;
+}
+
+/**
+ * Happiness swing from the tax rate. Free-riding villagers are delighted, a
+ * confiscatory rate is the fastest way to empty a village.
+ */
+export function taxHappiness(world: World): number {
+  return (0.5 - world.taxRate) * TAX_HAPPINESS_SWING;
 }
 
 /** Village tier, from hamlet (1) to great city (6). */
@@ -205,7 +225,7 @@ export function computeTier(world: World): number {
   const pop = world.stats.population;
   const happy = world.stats.happiness;
   const services = world.buildingList.filter(
-    (b) => b.state === 'active' && ['market', 'chapel', 'tavern', 'scholars_hall', 'grand_market'].includes(b.def),
+    (b) => b.state === 'active' && ['market', 'chapel', 'tavern', 'university', 'grand_market'].includes(b.def),
   ).length;
   let tier = 1;
   if (pop >= 25 && happy >= 45) tier = 2;

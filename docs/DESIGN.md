@@ -33,18 +33,49 @@ récolter ──► raffiner ──► consommer ──► bonheur ──► pop
 
 La progression est verrouillée par l'**arbre de recherche**, pas par le temps.
 Le joueur ne peut pas miner du fer à la minute 5, mais tout ce dont il a besoin
-est atteignable en quelques minutes de jeu. Les points de recherche tombent
-passivement (proportionnels à la population et au bonheur) et beaucoup plus vite
-avec la Maison des érudits : on ne reste jamais bloqué, on avance juste moins
-vite si le village va mal.
+est atteignable en quelques minutes de jeu.
 
-### Les trois ressources abstraites
+### L'arbre de recherche : cinq ères
+
+L'arbre est découpé en cinq **ères** de sept à treize études. Une ère ne
+s'ouvre que lorsque la précédente est entièrement terminée. C'est ce qui
+garantit qu'une chaîne n'est jamais débloquée à moitié : la chasse et la
+boucherie sont une seule étude, le moulin et le four aussi. Un test vérifie
+qu'aucun bâtiment débloqué ne consomme un bien qu'aucune ère antérieure ne
+produit.
+
+| Ère | Nom | Ce qu'elle ouvre |
+|---|---|---|
+| 1 | Les premiers feux | Nourriture de base, bois, pierre, marché, chaumières |
+| 2 | Le pain quotidien | Champs, moulin et four, conservation, volaille |
+| 3 | Métiers et échanges | Textile, cuir, charbon, comptoir de commerce |
+| 4 | L'âge du fer | Fer, forge, briques, brasserie, entrepôts, secours |
+| 5 | La cité | Or, mines profondes, port, halles, demeures |
+
+Deux verrous, et deux seulement :
+
+- **L'université.** Sans elle, aucune étude n'est possible. Chaque érudit
+  affecté ajoute 0,55 à la vitesse d'étude (0,35 pour le bâtiment vide), et
+  les chandelles la multiplient par 1,35. Trois érudits divisent par deux la
+  durée annoncée.
+- **L'argent.** Une étude coûte des pièces, de 35 pour les sentiers battus à
+  3 400 pour la charte de guilde. C'est l'impôt qui paie la recherche, ce qui
+  relie directement la politique fiscale à la vitesse de progression.
+
+### Les deux ressources abstraites
 
 | | Source | Sert à |
 |---|---|---|
-| **Or** | Impôts (par adulte, modulé par le bonheur et le rang), taverne, commerce | Coût des bâtiments, achats aux partenaires |
-| **Points de recherche** | Population × bonheur, Maison des érudits, objectifs | Débloquer les recherches |
-| **Bonheur** | Logement, nourriture variée, services, biens de confort | Natalité, immigration, impôts, rang du village |
+| **Or** | Impôts (par adulte, modulé par le taux, le bonheur et le rang), taverne, commerce | Coût des bâtiments, études, achats aux partenaires |
+| **Bonheur** | Logement, nourriture variée, services, biens de confort, taux d'imposition | Natalité, immigration, impôts, rang du village |
+
+### L'impôt
+
+Réglable de 0 à 100 % depuis l'hôtel de ville, 50 % au départ. Le rendement
+est linéaire : 2,2 pièces par adulte et par jour au taux neutre, avec un
+moral correct. Le bonheur suit l'inverse, sur une amplitude de 26 points
+entre un village exempté et un village pressuré. Monter l'impôt finance la
+recherche ; le laisser trop haut vide le village.
 
 ---
 

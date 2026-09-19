@@ -24,7 +24,7 @@ await page.goto(url, { waitUntil: 'load', timeout: 60000 });
 await page.waitForFunction(() => !!window.theRise, null, { timeout: 30000 });
 
 const built = await page.evaluate(() => {
-  const { game: g, RESEARCH, createVillager } = window.theRise;
+  const { game: g, RESEARCH, createVillager, workerSlots } = window.theRise;
   const w = g.world;
   w.treasury = 20000;
   for (const id of Object.keys(RESEARCH)) w.research.completed.add(id);
@@ -77,11 +77,18 @@ const built = await page.evaluate(() => {
   log.push(place('tailor'));
   log.push(place('well'));
   log.push(place('chapel'));
+  log.push(place('university'));
   for (let i = 0; i < 14; i++) place('cottage');
 
   // Seed enough hands that the chains can actually be staffed.
   for (let i = 0; i < 70; i++) {
     createVillager(w, w.startX + (Math.random() - 0.5) * 16, w.startY + (Math.random() - 0.5) * 16, 18 + Math.random() * 20);
+  }
+  // Staffing is manual now: fill every slot, production buildings first, then
+  // leave whoever is left over as labourers and porters.
+  for (const b of w.buildingList) {
+    if (b.def === 'town_hall') continue;
+    while (b.workers.length < workerSlots(b) && w.assignWorker(b.id)) { /* staff it */ }
   }
   return log.filter((l) => l.startsWith('FAILED'));
 });

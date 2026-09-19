@@ -80,7 +80,6 @@ export class World {
   wetness = 0;
 
   research: ResearchState = {
-    points: 0,
     completed: new Set(),
     active: null,
     progress: 0,
@@ -101,6 +100,12 @@ export class World {
   /** Rolling income buckets, reset every in-game minute for the HUD. */
   tradeIncomeWindow = 0;
   taxIncomeWindow = 0;
+  /**
+   * Share of a villager's earnings the village takes, 0..1. Half is the
+   * neutral setting: above it people grumble, below it they are cheerful and
+   * the treasury empty.
+   */
+  taxRate = 0.5;
   /** Comfort goods consumed by households, decays over time into happiness. */
   comfortPool = 0;
   /** Extra food consumption multiplier from active events. */

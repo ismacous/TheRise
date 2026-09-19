@@ -140,7 +140,7 @@ export function rebuildHaulJobs(world: World): void {
     }
 
     // 5. Chapel and scholars burn candles.
-    if ((b.def === 'chapel' || b.def === 'scholars_hall') && (b.inv.candles ?? 0) < 10) {
+    if ((b.def === 'chapel' || b.def === 'university') && (b.inv.candles ?? 0) < 10) {
       if (world.stockOf('candles') > 0 && !claimedKey.has(`-1:${b.id}:candles`)) {
         push(world, jobs, { good: 'candles', amount: 8, fromId: -1, toId: b.id, priority: 2 });
       }

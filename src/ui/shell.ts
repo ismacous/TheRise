@@ -7,6 +7,7 @@ import { SEASON_LABEL, type Notification } from '../sim/types';
 import { clear, el, onTap, setText } from './dom';
 import type { GameApi, SheetId } from './api';
 import { renderSheet, sheetTitle } from './panels';
+import { hasUniversity } from '../sim/research';
 import { activeObjectives } from '../sim/objectives';
 import { Minimap } from './minimap';
 
@@ -51,6 +52,9 @@ const PRIMARY_GOODS: GoodId[] = [
 ];
 
 /** Sheets whose contents change while they are open. */
+/** Sheets rendered as a full page rather than a bottom drawer. */
+const FULL_SHEETS = new Set<SheetId>(['research']);
+
 const LIVE_SHEETS = new Set<SheetId>(['research', 'trade', 'building', 'village', 'people', 'villager']);
 
 const DOCK: Array<{ id: SheetId; icon: string; label: string }> = [
@@ -106,7 +110,6 @@ export class UiShell {
       ['food', '🍞'],
       ['happy', '😊'],
       ['gold', '🪙'],
-      ['research', '📜'],
     ] as const) {
       const value = el('span', { class: 'vl', text: '0' });
       const node = el('div', { class: 'vital', 'data-k': key }, [
@@ -240,7 +243,6 @@ export class UiShell {
     happy.parentElement!.classList.toggle('good', s.happiness > 70);
 
     setText(this.vitalNodes.get('gold')!, formatNumber(w.treasury));
-    setText(this.vitalNodes.get('research')!, formatNumber(w.research.points));
   }
 
   private updateClock(): void {
@@ -298,7 +300,9 @@ export class UiShell {
       btn.classList.toggle('active', this.api.openSheetId === id);
       // A badge on Savoir whenever a research can be started right now.
       if (id === 'research') {
-        const canStart = !w.research.active && w.research.points > 8;
+        // A badge whenever the desk is free and there is a university to use.
+        const canStart =
+          !w.research.active && w.research.queue.length === 0 && hasUniversity(w);
         let badge = btn.querySelector('.badge') as HTMLElement | null;
         if (canStart && !badge) {
           badge = el('span', { class: 'badge', text: '!' });
@@ -475,6 +479,8 @@ export class UiShell {
   // ── Sheets ──────────────────────────────────────────────────────────────
   openSheet(id: SheetId): void {
     this.sheet.classList.add('open');
+    // The knowledge tree needs the whole screen to stay readable.
+    this.sheet.classList.toggle('full', FULL_SHEETS.has(id));
     this.renderSheetContents(id);
   }
 
