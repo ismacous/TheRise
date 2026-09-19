@@ -27,6 +27,9 @@ page.on('pageerror', (e) => errors.push(`[pageerror] ${e.message}`));
 
 await page.goto(url, { waitUntil: 'load', timeout: 60000 });
 await page.waitForTimeout(waitSeconds * 1000);
+// A fresh valley opens with the "name your village" prompt. Nobody is here to
+// answer it, and it would sit over every capture.
+await page.evaluate(() => window.theRise?.closeDialogs?.());
 
 const stats = await page.evaluate(() => {
   const g = window.game;

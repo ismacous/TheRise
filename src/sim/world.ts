@@ -9,6 +9,7 @@ import { SpatialGrid } from './spatial';
 import { computeModifiers, type Modifiers } from './modifiers';
 import { housingCapacity, serviceRadius, storageCapacity, upgradeTargetOf, workerSlots } from './levels';
 import { createPartnerRuntime, type PartnerRuntime } from './economy';
+import { randomVillageName } from '../data/names';
 import { TRADE_PARTNERS } from '../data/trade';
 import { DAWN, DUSK } from './clock';
 import { History, type LedgerSource } from './history';
@@ -87,6 +88,9 @@ export class World {
     queue: [],
   };
   modifiers: Modifiers = computeModifiers([]);
+
+  /** What the player calls this place. Chosen at the founding, renamable. */
+  villageName = 'Le Hameau';
 
   treasury = 120;
   /** Every coin in and out, tagged by source, plus the rolling curves. */
@@ -188,6 +192,8 @@ export class World {
       if (n.kind === 'wild_animal') this.animals.push(n);
     }
     this.rebuildNodeGrid();
+
+    this.villageName = randomVillageName((list) => this.rng.pick(list));
 
     for (const p of TRADE_PARTNERS) this.partners.set(p.id, createPartnerRuntime(p));
 

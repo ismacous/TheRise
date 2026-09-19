@@ -21,6 +21,9 @@ const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
 await page.goto(url, { waitUntil: 'load', timeout: 60000 });
 await page.waitForFunction(() => !!window.theRise, null, { timeout: 30000 });
+// A fresh valley opens with the "name your village" prompt. Nobody is here to
+// answer it, and it would sit over every screenshot.
+await page.evaluate(() => window.theRise.closeDialogs?.());
 
 for (const id of ids) {
   const centre = await page.evaluate((id) => {

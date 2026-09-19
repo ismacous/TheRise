@@ -62,6 +62,18 @@ Deux verrous, et deux seulement :
   3 400 pour la charte de guilde. C'est l'impôt qui paie la recherche, ce qui
   relie directement la politique fiscale à la vitesse de progression.
 
+### Les noms
+
+Le village est nommé à sa fondation — le nom proposé est tiré au sort, on le
+garde d'une touche ou on le remplace — et renommé depuis l'hôtel de ville.
+Chaque villageois se renomme depuis sa fiche, prénom et nom.
+
+La boîte de dialogue est du DOM (`src/ui/dialog.ts`), pas `window.prompt` :
+sur Android celui-ci ouvre une fenêtre système qui ne ressemble à rien du jeu
+et se comporte mal dans une WebView Capacitor. Elle ne bloque jamais le
+démarrage — la partie tourne derrière — sinon le harnais de test headless
+attendrait indéfiniment une réponse que personne ne donne.
+
 ### D'où vient le bonheur
 
 Quatre sources, et le design ne fonctionne que si les quatre comptent :

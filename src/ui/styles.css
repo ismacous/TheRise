@@ -1989,3 +1989,102 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* ── Modal prompts ──────────────────────────────────────────────────────── */
+.dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(8, 6, 4, 0.62);
+  backdrop-filter: blur(3px);
+  animation: dialog-in 0.18s ease;
+}
+
+.dialog-overlay.leaving {
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+
+.dialog-overlay.shake .dialog {
+  animation: dialog-shake 0.38s ease;
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes dialog-shake {
+  25% {
+    transform: translateX(-7px);
+  }
+  50% {
+    transform: translateX(6px);
+  }
+  75% {
+    transform: translateX(-3px);
+  }
+}
+
+.dialog {
+  width: 100%;
+  max-width: 380px;
+  padding: 18px;
+  border-radius: var(--radius);
+  border: 1px solid var(--panel-line);
+  background: var(--panel-solid);
+  box-shadow: var(--shadow);
+}
+
+.dialog-title {
+  margin: 0 0 12px;
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--gold);
+}
+
+.dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.dialog-label {
+  font-size: 12px;
+  color: var(--ink-dim);
+}
+
+.dialog-label + .dialog-input {
+  margin-bottom: 4px;
+}
+
+.dialog-input {
+  width: 100%;
+  padding: 11px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--panel-line);
+  background: rgba(0, 0, 0, 0.3);
+  color: var(--ink);
+  font: inherit;
+  font-size: 16px; /* Anything under 16px makes iOS zoom the page on focus. */
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.dialog-input:focus {
+  outline: none;
+  border-color: var(--gold-dim);
+  background: rgba(0, 0, 0, 0.42);
+}
+
+/* The villager card's rename button sits at the end of the header row. */
+.detail-head .icon-btn {
+  margin-left: auto;
+  flex: none;
+}

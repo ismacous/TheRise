@@ -34,6 +34,7 @@ export interface SaveData {
   time: { elapsed: number; day: number; dayFraction: number; season: string; year: number };
   weather: string;
   weatherTimer: number;
+  villageName: string;
   treasury: number;
   history: ReturnType<History['toJSON']>;
   taxRate: number;
@@ -92,6 +93,7 @@ export function serialize(sim: Simulation, gen: Partial<WorldGenOptions>): SaveD
     time: { ...w.time },
     weather: w.weather,
     weatherTimer: w.weatherTimer,
+    villageName: w.villageName,
     treasury: w.treasury,
     history: w.history.toJSON(),
     taxRate: w.taxRate,
@@ -207,6 +209,7 @@ export function deserialize(data: SaveData): Simulation {
   Object.assign(w.time, data.time);
   w.weather = data.weather as never;
   w.weatherTimer = data.weatherTimer;
+  w.villageName = data.villageName || w.villageName;
   w.treasury = data.treasury;
   w.history = History.fromJSON(data.history);
   w.taxRate = data.taxRate ?? 0.5;

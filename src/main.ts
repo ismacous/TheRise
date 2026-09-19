@@ -1,6 +1,7 @@
 import { Game } from './game';
 import { createNewGame } from './sim/simulation';
 import { deserialize, readSave } from './sim/save';
+import { askText, closeDialogs } from './ui/dialog';
 import type { WorldGenOptions } from './sim/worldgen';
 
 const DEFAULT_GEN: Partial<WorldGenOptions> = {
@@ -51,10 +52,12 @@ async function boot(): Promise<void> {
     console.warn('Sauvegarde ignorée', err);
   }
 
+  let founding = false;
   if (!sim) {
     setBoot(0.35, 'Façonnage de la vallée…');
     await nextFrame();
     sim = createNewGame(gen);
+    founding = true;
   }
 
   setBoot(0.7, 'Plantation des forêts…');
@@ -71,6 +74,9 @@ async function boot(): Promise<void> {
 
   // Exposed for the device console and for the headless test harness: the
   // catalogues and a few constructors, so a session can be driven from script.
+  // This must be assigned *before* the founding dialog: the harness waits on
+  // `window.theRise`, and awaiting a prompt nobody is there to answer would
+  // hang every screenshot and stress run on a fresh valley.
   const debugApi = {
     game,
     BUILDINGS: (await import('./data/buildings')).BUILDINGS,
@@ -78,11 +84,29 @@ async function boot(): Promise<void> {
     GOODS: (await import('./data/goods')).GOODS,
     createVillager: (await import('./sim/villagers')).createVillager,
     workerSlots: (await import('./sim/levels')).workerSlots,
+    closeDialogs,
   };
   Object.assign(window as unknown as Record<string, unknown>, {
     game,
     theRise: debugApi,
   });
+
+  // A village you named is a village you come back to. Asked once, at the
+  // founding, over a game that is already running, with a suggestion filled in
+  // so it is one tap to accept and one to decline.
+  if (founding) {
+    void askText({
+      title: 'Fondez votre village',
+      label: 'Quel nom lui donnez-vous ?',
+      value: game.world.villageName,
+      confirm: 'Fonder',
+      cancel: 'Garder ce nom',
+    }).then((chosen) => {
+      if (chosen) game.world.villageName = chosen.value;
+      game.world.notify(`${game.world.villageName} est fondé.`, 'flag', 'good');
+      game.requestUiRefresh();
+    });
+  }
 }
 
 boot().catch((err: unknown) => {

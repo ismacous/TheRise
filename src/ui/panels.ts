@@ -58,6 +58,7 @@ import type { Building, Villager } from '../sim/types';
 import type { GameApi, SheetId } from './api';
 import { bar, el, onTap } from './dom';
 import { icon, pastille, type IconName } from './icons';
+import { askText } from './dialog';
 import {
   CATEGORY_LABEL as GOOD_CATEGORY_LABEL,
   CATEGORY_ORDER as GOOD_CATEGORY_ORDER,
@@ -114,7 +115,10 @@ export function sheetTitle(id: SheetId, api: GameApi): { title: string; sub?: st
       };
     }
     case 'village':
-      return { title: TIER_NAMES[w.stats.tier] ?? 'Village', sub: `Rang ${w.stats.tier} / 6` };
+      return {
+        title: w.villageName,
+        sub: `${TIER_NAMES[w.stats.tier] ?? 'Village'} · rang ${w.stats.tier} / 6`,
+      };
     case 'settings':
       return { title: 'Options' };
     case 'building': {
@@ -1438,11 +1442,31 @@ function productionSummary(api: GameApi): ProdLine[] {
 
 // ── Selected building ──────────────────────────────────────────────────────
 
-/** Tax rate and the money it brings in — the town hall's own business. */
+/** Tax rate, the money it brings in, and the village's own name. */
 function renderTreasury(api: GameApi, body: HTMLElement, refresh: Refresh): void {
   const w = api.world;
   const perMinute = taxIncome(w) * 60;
   const swing = taxHappiness(w);
+
+  body.append(el('div', { class: 'section-title', text: 'Le village' }));
+  const rename = el('button', { class: 'btn grow', text: `Renommer « ${w.villageName} »` });
+  onTap(rename, () => {
+    void askText({
+      title: 'Nom du village',
+      label: 'Comment appelle-t-on cet endroit ?',
+      value: w.villageName,
+      confirm: 'Renommer',
+      cancel: 'Annuler',
+    }).then((result) => {
+      if (!result) return;
+      const previous = w.villageName;
+      w.villageName = result.value;
+      w.notify(`${previous} s'appelle désormais ${w.villageName}`, 'flag', 'good');
+      api.requestUiRefresh();
+      refresh();
+    });
+  });
+  body.append(el('div', { class: 'btn-row' }, [rename]));
 
   body.append(el('div', { class: 'section-title', text: 'Impôts' }));
   body.append(
@@ -1774,18 +1798,41 @@ function renderVillager(api: GameApi, body: HTMLElement, refresh: Refresh): void
   const prof = PROFESSIONS[v.profession] ?? PROFESSIONS.idle;
 
   const avatar = villagerAvatar(v, 'big');
-  body.append(
-    el('div', { class: 'detail-head' }, [
-      avatar,
-      el('div', {}, [
-        el('div', { class: 'card-title', text: fullName(v) }),
-        el('div', {
-          class: 'card-desc',
-          text: `${v.female ? 'Femme' : 'Homme'} · ${Math.floor(v.age)} ans · ${prof.name}`,
-        }),
-      ]),
+  const head = el('div', { class: 'detail-head' }, [
+    avatar,
+    el('div', { class: 'grow' }, [
+      el('div', { class: 'card-title', text: fullName(v) }),
+      el('div', {
+        class: 'card-desc',
+        text: `${v.female ? 'Femme' : 'Homme'} · ${Math.floor(v.age)} ans · ${prof.name}`,
+      }),
     ]),
-  );
+  ]);
+  const renameVillager = el('button', {
+    class: 'icon-btn',
+    'aria-label': 'Renommer',
+    title: 'Renommer',
+  });
+  renameVillager.append(icon('scroll'));
+  onTap(renameVillager, () => {
+    void askText({
+      title: 'Renommer',
+      label: 'Prénom',
+      value: v.name,
+      secondLabel: 'Nom',
+      secondValue: v.surname,
+      confirm: 'Renommer',
+      cancel: 'Annuler',
+    }).then((result) => {
+      if (!result) return;
+      v.name = result.value;
+      if (result.second) v.surname = result.second;
+      api.requestUiRefresh();
+      refresh();
+    });
+  });
+  head.append(renameVillager);
+  body.append(head);
 
   body.append(el('div', { class: 'section-title', text: 'En ce moment' }));
   body.append(

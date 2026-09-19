@@ -8,6 +8,7 @@ import type { World } from './sim/world';
 import type { WorldGenOptions } from './sim/worldgen';
 import type { GameApi, QualityLevel, SheetId } from './ui/api';
 import { UiShell } from './ui/shell';
+import { askText, closeDialogs } from './ui/dialog';
 
 const AUTOSAVE_INTERVAL = 120;
 
@@ -369,9 +370,23 @@ export class Game implements GameApi {
     const gen = { ...this.genOptions, seed: seed ?? `vallee-${Math.floor(Math.random() * 1e9)}` };
     const sim = createNewGame(gen);
     this.replaceSimulation(sim, gen);
+    void askText({
+      title: 'Fondez votre village',
+      label: 'Quel nom lui donnez-vous ?',
+      value: this.world.villageName,
+      confirm: 'Fonder',
+      cancel: 'Garder ce nom',
+    }).then((chosen) => {
+      if (chosen) this.world.villageName = chosen.value;
+      this.world.notify(`${this.world.villageName} est fondé.`, 'flag', 'good');
+      this.requestUiRefresh();
+    });
   }
 
   private replaceSimulation(sim: Simulation, gen: Partial<WorldGenOptions>): void {
+    // A dialog left open over the old world would act on a village that no
+    // longer exists.
+    closeDialogs();
     const uiRoot = document.getElementById('ui-root')!;
     this.renderer.dispose();
     this.sim = sim;
