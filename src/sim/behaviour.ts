@@ -19,10 +19,11 @@ import {
   yieldFromNode,
 } from './villagers';
 import { hasAllMaterials as siteHasAllMaterials, siteWork } from './build';
+import { siteErrand, siteStocked, workshopErrand } from './supply';
 import { outputMultiplier } from './levels';
 import { recordOutput } from './output';
 import { activeRecipe } from './recipes';
-import type { Building, HaulJob, Villager } from './types';
+import type { Building, HaulJob, Villager, VillagerTask } from './types';
 import type { World } from './world';
 
 const NIGHT_START = 0.9;
@@ -147,9 +148,23 @@ function pickTask(world: World, v: Villager): void {
     return;
   }
   const work = v.workId ? world.buildings.get(v.workId) : null;
-
   if (work && work.state === 'active' && work.enabled) {
     const def = BUILDINGS[work.def];
+    // Before anything else: a worker whose bench is short of something goes
+    // and gets it. Nobody else in the village has to notice, and nothing else
+    // can outbid the errand — see `sim/supply.ts`.
+    const errand = workshopErrand(world, work);
+    if (errand) {
+      v.task = {
+        kind: 'haul',
+        fromId: errand.from.id,
+        toId: work.id,
+        good: errand.good,
+        amount: errand.amount,
+        phase: 0,
+      };
+      return;
+    }
     if (def.gather) {
       v.task = { kind: 'harvest', targetId: work.id, phase: 0 };
       return;
@@ -162,19 +177,19 @@ function pickTask(world: World, v: Villager): void {
 
   // Carriers, builders and the unemployed share the logistics backlog.
   if (v.profession === 'carrier' || v.profession === 'builder' || v.profession === 'idle') {
-    const site = findConstructionSite(world, v);
-    if (site) {
-      v.task = { kind: 'build', targetId: site.id, phase: 0 };
+    const job = findSiteJob(world, v);
+    if (job) {
+      v.task = job;
       return;
     }
-    const job = claimHaulJob(world, v);
-    if (job) {
+    const round = claimHaulJob(world, v);
+    if (round) {
       v.task = {
         kind: 'haul',
-        fromId: job.fromId,
-        toId: job.toId,
-        good: job.good,
-        amount: job.amount,
+        fromId: round.fromId,
+        toId: round.toId,
+        good: round.good,
+        amount: round.amount,
         phase: 0,
       };
       return;
@@ -193,24 +208,50 @@ function pickTask(world: World, v: Villager): void {
   }
 }
 
-function findConstructionSite(world: World, v: Villager): Building | null {
+/**
+ * What this builder should do about the village's building sites: raise one
+ * that has its materials, or carry a missing material to one that has not.
+ *
+ * Sites are tried nearest first, and a site whose missing material is in no
+ * depot at all is skipped rather than reserved — a builder standing next to a
+ * plot waiting for planks that do not exist helps nobody.
+ */
+function findSiteJob(world: World, v: Villager): VillagerTask | null {
   if (world.constructionSites.length === 0) return null;
-  let best: Building | null = null;
-  let bestD = Infinity;
+  const candidates: Array<{ b: Building; d: number }> = [];
   for (const b of world.constructionSites) {
     const isUpgrade = b.state === 'active' && b.upgrade !== null;
     const isDemolition = b.demolish !== null;
     if (!isUpgrade && !isDemolition && b.state !== 'planned' && b.state !== 'building') continue;
-    if (!isUpgrade && !isDemolition && !hasAllMaterials(world, b)) continue;
     const builders = countBuildersOn(world, b.id);
     if (builders >= 4) continue;
-    const d = (b.cx - v.x) ** 2 + (b.cy - v.y) ** 2 + builders * 400;
-    if (d < bestD) {
-      bestD = d;
-      best = b;
+    candidates.push({ b, d: (b.cx - v.x) ** 2 + (b.cy - v.y) ** 2 + builders * 400 });
+  }
+  if (candidates.length === 0) return null;
+  candidates.sort((a, b) => a.d - b.d);
+
+  // Only a handful are worth considering: the nearest few. Walking the whole
+  // list asking every depot about every material would cost a scan of the
+  // village per idle builder per second.
+  const limit = Math.min(candidates.length, 6);
+  for (let i = 0; i < limit; i++) {
+    const b = candidates[i].b;
+    if (b.demolish || (b.state === 'active' && b.upgrade) || siteStocked(b)) {
+      return { kind: 'build', targetId: b.id, phase: 0 };
+    }
+    const errand = siteErrand(world, b, v);
+    if (errand) {
+      return {
+        kind: 'haul',
+        fromId: errand.from.id,
+        toId: b.id,
+        good: errand.good,
+        amount: errand.amount,
+        phase: 0,
+      };
     }
   }
-  return best;
+  return null;
 }
 
 function countBuildersOn(world: World, id: number): number {
@@ -413,18 +454,35 @@ function doProduce(world: World, v: Villager, dt: number): void {
     return;
   }
   // Check inputs.
+  //
+  // Standing at the bench with nothing to work on used to be the end of it:
+  // the task was kept, so the worker never went back through task selection
+  // and never went to fetch anything. Dropping it here is what lets
+  // `workshopErrand` send them to the nearest depot — which is the whole
+  // point of workers fetching their own supplies.
   for (const [good, need] of Object.entries(recipe.inputs)) {
     if ((b.inv[good as GoodId] ?? 0) < (need as number)) {
       b.stall = `Manque ${GOODS[good as GoodId].name}`;
       b.efficiency = Math.max(0, b.efficiency - dt * 0.5);
       v.state = 'idle';
+      clearTask(v);
+      v.taskCooldown = 0.5;
       return;
     }
   }
   if (buildingSpace(world, b) < 8) {
+    // The shed is full. Rather than down tools until a porter happens by, the
+    // worker runs a load to a depot: the same valve the gatherers have.
     b.stall = 'Stock plein';
     b.efficiency = Math.max(0, b.efficiency - dt * 0.5);
-    v.state = 'idle';
+    const spare = dominantGood(b);
+    if (spare) {
+      v.task = { kind: 'haul', fromId: b.id, toId: -1, good: spare, phase: 0 };
+    } else {
+      v.state = 'idle';
+      clearTask(v);
+      v.taskCooldown = 0.5;
+    }
     return;
   }
   b.stall = null;

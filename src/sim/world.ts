@@ -85,6 +85,18 @@ export class World {
   haulJobs: HaulJob[] = [];
   /** Refreshed with the haul board; saves scanning every building per villager. */
   constructionSites: Building[] = [];
+  /**
+   * Every active global store, refreshed with the stock cache. Builders and
+   * deposits ask for "the nearest depot" constantly, and a depot list is a
+   * couple of dozen entries where the building list is hundreds.
+   */
+  depotList: Building[] = [];
+  /**
+   * What each workshop is short of and where to get it, worked out once a
+   * second rather than once per worker per task. Not saved: it is rebuilt
+   * within a second of loading.
+   */
+  supplyPlan = new Map<number, { fromId: number; good: GoodId; amount: number } | null>();
 
   time: GameTime = { elapsed: 0, day: 1, dayFraction: 0.35, season: 'spring', year: 1 };
   weather: WeatherKind = 'clear';
@@ -822,9 +834,11 @@ export class World {
     const s: Partial<Record<GoodId, number>> = {};
     let cap = 0;
     let used = 0;
+    this.depotList.length = 0;
     for (const b of this.buildingList) {
       const def = BUILDINGS[b.def];
       if (!def.storage?.global || b.state !== 'active') continue;
+      this.depotList.push(b);
       cap += this.capacityOf(b);
       for (const [g, amt] of Object.entries(b.inv)) {
         s[g as GoodId] = (s[g as GoodId] ?? 0) + (amt as number);

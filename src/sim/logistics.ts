@@ -1,9 +1,8 @@
 import { BUILDINGS } from '../data/buildings';
 import { GOODS, type GoodId } from '../data/goods';
 import { collectRadius, storageCapacity } from './levels';
-import { activeRecipe, currentInputs, currentOutputs } from './recipes';
-import type { Building, HaulJob } from './types';
-import { siteCost } from './build';
+import { currentInputs, currentOutputs } from './recipes';
+import type { HaulJob } from './types';
 import type { World } from './world';
 
 const MAX_JOBS = 160;
@@ -61,26 +60,14 @@ export function rebuildHaulJobs(world: World): void {
   for (const b of world.buildingList) {
     const def = BUILDINGS[b.def];
 
-    // 1. Construction sites pulling in their materials.
-    if ((b.state === 'planned' || b.state === 'building') && !b.demolish) {
-      for (const [g, need] of Object.entries(siteCost(b))) {
-        const have = b.delivered[g as GoodId] ?? 0;
-        const inFlight = countInFlight(jobs, b.id, g as GoodId);
-        const missing = (need as number) - have - inFlight;
-        if (missing <= 0) continue;
-        if (world.stockOf(g as GoodId) <= 0) continue;
-        const key = `-1:${b.id}:${g}`;
-        if (claimedKey.has(key)) continue;
-        push(world, jobs, {
-          good: g as GoodId,
-          amount: Math.min(missing, GOODS[g as GoodId].carry * 2),
-          fromId: -1,
-          toId: b.id,
-          priority: 6,
-        });
-      }
-      continue;
-    }
+    // 1. Building sites are not on this board.
+    //
+    // They used to be, and it was the worst bug in the game: a cottage sat at
+    // two logs out of twelve while every log in the village went to the
+    // sawmill, because the sawmill stood nearer the storehouse and priority 6
+    // against priority 5 buys a site thirty tiles of head start, no more.
+    // Materials for a site are a builder's errand now, taken from a depot —
+    // see `sim/supply.ts`.
     if (b.state !== 'active') continue;
 
     // 2. Ship finished goods out to the storehouses.
@@ -101,23 +88,9 @@ export function rebuildHaulJobs(world: World): void {
       }
     }
 
-    // 3. Pull raw inputs in.
-    for (const g of inputGoods(b)) {
-      const have = b.inv[g] ?? 0;
-      const target = targetInputStock(world, b, g);
-      const inFlight = countInFlight(jobs, b.id, g);
-      if (have + inFlight >= target) continue;
-      if (world.stockOf(g) <= 0) continue;
-      const key = `-1:${b.id}:${g}`;
-      if (claimedKey.has(key)) continue;
-      push(world, jobs, {
-        good: g,
-        amount: Math.min(target - have - inFlight, GOODS[g].carry * 2),
-        fromId: -1,
-        toId: b.id,
-        priority: 5,
-      });
-    }
+    // 3. Nor are a workshop's inputs. Its own people fetch them, which is
+    //    both what a sawyer would actually do and the only arrangement in
+    //    which a workshop cannot be starved by a busier neighbour.
 
     // 4. Keep markets stocked with food and comfort goods.
     if (def.service?.kind === 'market') {
@@ -221,13 +194,6 @@ function countInFlight(jobs: HaulJob[], toId: number, good: GoodId): number {
   return n;
 }
 
-function targetInputStock(_world: World, b: Building, g: GoodId): number {
-  const def = BUILDINGS[b.def];
-  const per = activeRecipe(b)?.inputs[g] ?? def.gather?.consumes?.[g] ?? 1;
-  const cap = storageCapacity(b) || 20;
-  // Keep roughly six batches on hand, bounded by the building's own shed.
-  return Math.min(Math.max(per * 6, GOODS[g].carry), Math.floor(cap * 0.45));
-}
 
 function marketWishlist(world: World): GoodId[] {
   const out: GoodId[] = [];

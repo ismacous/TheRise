@@ -26,14 +26,28 @@ export function setRecipe(b: Building, index: number): void {
   b.stall = null;
 }
 
-/** Goods the building currently consumes. */
+/**
+ * Goods the building currently consumes.
+ *
+ * Memoised by (type, recipe), because the answer only depends on those two
+ * and this is asked often enough to matter: a starved workshop asks it every
+ * half-second, per worker, and a set plus an array per call added up to real
+ * time in a city of three hundred buildings.
+ */
+const inputCache = new Map<string, GoodId[]>();
+
 export function currentInputs(b: Building): GoodId[] {
+  const key = `${b.def}:${b.recipeIndex}`;
+  const cached = inputCache.get(key);
+  if (cached) return cached;
   const r = activeRecipe(b);
   const out = new Set<GoodId>();
   if (r) for (const g of Object.keys(r.inputs)) out.add(g as GoodId);
   const gather = BUILDINGS[b.def].gather;
   if (gather?.consumes) for (const g of Object.keys(gather.consumes)) out.add(g as GoodId);
-  return [...out];
+  const list = [...out];
+  inputCache.set(key, list);
+  return list;
 }
 
 /** Goods the building currently produces. */

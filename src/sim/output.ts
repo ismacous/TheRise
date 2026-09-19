@@ -1,4 +1,5 @@
 import type { GoodId } from '../data/goods';
+import { planSupply } from './supply';
 import type { Building } from './types';
 import type { World } from './world';
 
@@ -56,6 +57,8 @@ export function recordOutput(b: Building, good: GoodId, amount: number): void {
  * second walk of a three-hundred-building city every second is not free.
  */
 export function updateBuildingMeters(world: World, dt: number): void {
+  // Who needs what, and from where. Once for the village, not once per worker.
+  planSupply(world);
   for (const b of world.buildingList) {
     // A workshop pauses constantly in normal running: waiting a moment for a
     // delivery is not a fault. What matters is how long it has been waiting.
