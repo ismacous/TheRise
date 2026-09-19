@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createNewGame } from '../src/sim/simulation';
-import { ALL_RESEARCH_IDS } from '../src/data/research';
+import { ALL_RESEARCH_IDS, MAX_TIER, RESEARCH, researchOfTier } from '../src/data/research';
 import { taxHappiness, taxIncome } from '../src/sim/economy';
 import { maxLevelOf, storageCapacity, upgradeTargetOf } from '../src/sim/levels';
 import { BUILDINGS } from '../src/data/buildings';
@@ -177,5 +177,35 @@ describe('ruins', () => {
     expect(ruin.state).toBe('planned');
     // The rubble already on the plot counts towards the bill.
     expect(Object.keys(ruin.delivered).length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * The shape of the curve, rather than any one number on it.
+ *
+ * "On évolue trop rapidement" is a judgement about pace, and pace is not
+ * something a test can settle. What a test can do is stop the two ways the
+ * tuning breaks: a first study nobody can afford, and an era that costs less
+ * than the one before it.
+ */
+describe('the shape of the climb', () => {
+  it('lets the founding purse pay for the university and the tax register', () => {
+    const sim = createNewGame({ seed: 'purse' });
+    const w = sim.world;
+    const bootstrap = BUILDINGS.university.goldCost + RESEARCH.r_taxation.cost;
+    expect(w.treasury).toBeGreaterThanOrEqual(bootstrap);
+    // And not so much more that the first hour pays for itself.
+    expect(w.treasury).toBeLessThan(bootstrap * 2);
+  });
+
+  it('asks more of each era than of the one before', () => {
+    let previous = 0;
+    for (let tier = 1; tier <= MAX_TIER; tier++) {
+      const defs = researchOfTier(tier);
+      expect(defs.length).toBeGreaterThan(0);
+      const average = defs.reduce((sum, d) => sum + d.cost, 0) / defs.length;
+      expect(average, `ère ${tier} coûte moins que l'ère ${tier - 1}`).toBeGreaterThan(previous);
+      previous = average;
+    }
   });
 });

@@ -6,7 +6,7 @@ date ; c'est l'ordre dans lequel les ajouts auraient le plus de valeur.
 ## Déjà dans le jeu
 
 - Génération de vallée déterministe, 208 × 208, relief, rivières, lac, biomes
-- 67 bâtiments, 34 ressources, 48 recherches, 10 partenaires commerciaux
+- 68 bâtiments, 34 ressources, 51 recherches, 10 partenaires commerciaux
 - Villageois autonomes : métiers, besoins, logement, natalité, mortalité
 - Logistique par tableau de tâches, porteurs, chantiers, marchés
 - Quatre saisons, cycle jour/nuit, météo, incendies, épidémies, événements
@@ -19,7 +19,12 @@ date ; c'est l'ordre dans lequel les ajouts auraient le plus de valeur.
 - Chemins d'usure : les routes se tracent toutes seules là où l'on marche
 - Ornements et lieux de loisir : parterres, bancs, lampadaires, fontaine,
   statue, place du village, théâtre de tréteaux
-- Ambiance sonore entièrement synthétisée (vent, pluie, oiseaux, métiers)
+- Ambiance sonore entièrement synthétisée (vent, pluie, tonnerre, oiseaux,
+  métiers), suspendue dès que le jeu passe en arrière-plan
+- Épingles d'état : atelier sans ouvrier ou à l'arrêt, villageois malade,
+  affamé ou malheureux — les gens seulement de près
+- Cadence réelle mesurée par bâtiment, en unités par minute
+- Ruines réparables ; démolition qui demande des bras et du temps
 - Sauvegarde automatique, trois niveaux de qualité, APK produit par CI
 
 ## Ensuite — confort de jeu

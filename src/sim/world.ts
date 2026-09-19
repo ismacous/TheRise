@@ -103,7 +103,9 @@ export class World {
   /** What the player calls this place. Chosen at the founding, renamable. */
   villageName = 'Le Hameau';
 
-  treasury = 120;
+  // The founding purse. It has to cover a university and the tax register,
+  // because until that study lands nothing else brings a coin in.
+  treasury = 150;
   /** Every coin in and out, tagged by source, plus the rolling curves. */
   history = new History();
   /** Tracks footfall and turns well-trodden ground into trails. */

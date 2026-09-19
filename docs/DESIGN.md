@@ -52,15 +52,23 @@ produit.
 | 4 | L'âge du fer | Fer, forge, briques, brasserie, entrepôts, secours |
 | 5 | La cité | Or, mines profondes, port, halles, demeures |
 
-Deux verrous, et deux seulement :
+Trois verrous :
 
-- **L'université.** Sans elle, aucune étude n'est possible. Chaque érudit
-  affecté ajoute 0,55 à la vitesse d'étude (0,35 pour le bâtiment vide), et
-  les chandelles la multiplient par 1,35. Trois érudits divisent par deux la
-  durée annoncée.
-- **L'argent.** Une étude coûte des pièces, de 35 pour les sentiers battus à
-  3 400 pour la charte de guilde. C'est l'impôt qui paie la recherche, ce qui
-  relie directement la politique fiscale à la vitesse de progression.
+- **L'université.** Sans elle, aucune étude n'est possible — et sans érudit
+  affecté non plus. Un hall vide avançait tout seul, assez lentement pour
+  passer inaperçu et assez vite pour qu'on puisse gravir tout l'arbre sans
+  jamais y mettre personne. Chaque érudit ajoute 0,6 à la vitesse d'étude, les
+  chandelles la multiplient par 1,35.
+- **L'argent.** Une étude coûte des pièces. Les prix montent d'une ère à
+  l'autre : on les débloquait trop facilement, et la partie était finie avant
+  son milieu. Un test refuse une ère qui coûterait moins cher que la
+  précédente.
+- **L'impôt lui-même**, qui est une étude. Voir plus bas : jusqu'à
+  « Registre et dîme », personne ne paie rien.
+
+Les niveaux II et III des bâtiments sont eux aussi dans l'arbre — « Maîtres
+bâtisseurs » à l'ère 2, « Grands travaux » à l'ère 4. Ils étaient accessibles
+dès la première minute.
 
 ### Les noms
 
@@ -98,11 +106,22 @@ pénalité, il n'apportait rien.
 
 ### L'impôt
 
-Réglable de 0 à 100 % depuis l'hôtel de ville, 50 % au départ. Le rendement
-est linéaire : 2,2 pièces par adulte et par jour au taux neutre, avec un
-moral correct. Le bonheur suit l'inverse, sur une amplitude de 26 points
-entre un village exempté et un village pressuré. Monter l'impôt finance la
-recherche ; le laisser trop haut vide le village.
+**Il n'existe pas tant qu'on ne l'a pas étudié.** « Registre et dîme » (ère 1)
+ouvre un registre ; avant, le taux est à zéro, le rendement est nul, et le
+panneau de l'hôtel de ville ne montre pas de curseur mais la ligne qui dit
+quoi étudier. Le village n'a alors ni gratitude ni rancune fiscale : il n'y a
+rien à ressentir. L'étude terminée pose le taux à 50 %.
+
+C'est la seule étude dont le prix n'a pas bougé lors du ralentissement de la
+courbe : rien d'autre ne fait entrer de pièces avant elle, et la bourse de
+fondation (150) doit couvrir l'université (60) *et* le registre (50). Une
+porte d'entrée inabordable n'est pas un départ lent, c'est une absence de
+départ.
+
+Ensuite : réglable de 0 à 100 % depuis l'hôtel de ville. Le rendement est
+linéaire — 2,2 pièces par adulte et par jour au taux neutre, avec un moral
+correct. Le bonheur suit l'inverse, sur une amplitude de 26 points entre un
+village exempté et un village pressuré.
 
 ---
 
@@ -272,10 +291,17 @@ atelier avait une pleine charge en attente. Un dépôt **doté de porteurs** fai
 maintenant sa tournée : chacun de ses employés va chercher ce qui s'accumule
 dans un atelier de son rayon, même les petites quantités, et le ramène.
 
-| | Rayon de tournée au niveau I |
-|---|---|
-| Entrepôt | 22 cases |
-| Grand entrepôt | 40 cases |
+| | Places au niveau I | Rayon de tournée au niveau I |
+|---|---|---|
+| Hôtel de ville | 200, **fixes** | — |
+| Entrepôt | 300 | 22 cases |
+| Grenier | 600 | — |
+| Grand entrepôt | 900 | 40 cases |
+
+Les capacités ont été réduites : un dépôt qui contenait l'essentiel de la
+production d'un village dispensait le joueur de réfléchir à où vont les
+choses. Celle de l'hôtel de ville ne bouge pas avec son niveau — c'est l'aide
+du premier jour, pas un entrepôt dont on pourrait se contenter.
 
 Le rayon grandit avec le niveau, comme tous les rayons du jeu. Un porteur
 affecté à un dépôt privilégie les tâches qui y mènent : c'est pour ça qu'on

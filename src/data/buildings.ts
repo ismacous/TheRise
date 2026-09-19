@@ -312,7 +312,9 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     workers: 2,
     profession: 'carrier',
     placement: { kind: 'land' },
-    storage: { capacity: 500, global: true, collect: 22 },
+    // Three hundred, not five: a depot that held most of a village's output
+    // meant the player never had to think about where things go.
+    storage: { capacity: 300, global: true, collect: 22 },
     upgradesTo: 'warehouse',
     tier: 1,
     fireRisk: 1.2,
@@ -330,7 +332,7 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     profession: 'carrier',
     placement: { kind: 'land' },
     requires: 'r_logistics',
-    storage: { capacity: 1400, global: true, collect: 40 },
+    storage: { capacity: 900, global: true, collect: 40 },
     tier: 2,
     fireRisk: 0.9,
     desc: "Quais de déchargement et porteurs supplémentaires.",
@@ -348,7 +350,7 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     placement: { kind: 'land' },
     requires: 'r_food_preservation',
     storage: {
-      capacity: 900,
+      capacity: 600,
       global: true,
       accepts: ['bread', 'meat', 'fish', 'smoked_fish', 'berries', 'eggs', 'wheat', 'flour', 'ale'],
     },
