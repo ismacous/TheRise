@@ -62,7 +62,18 @@ export interface HousingSpec {
   comfort: number;
 }
 
-export type ServiceKind = 'market' | 'faith' | 'tavern' | 'water' | 'fire' | 'health' | 'research';
+export type ServiceKind =
+  | 'market'
+  | 'faith'
+  | 'tavern'
+  | 'water'
+  | 'fire'
+  | 'health'
+  | 'research'
+  /** Flowers, benches, fountains: beauty, and nothing else. */
+  | 'decor'
+  /** Somewhere to spend an evening. The closer you live, the better. */
+  | 'leisure';
 
 export interface ServiceSpec {
   kind: ServiceKind;
@@ -164,7 +175,15 @@ export type BuildingId =
   | 'firewatch'
   | 'healer_hut'
   | 'dirt_path'
-  | 'cobbled_road';
+  | 'cobbled_road'
+  // ── Ornament and leisure ──────────────────────────────────────────────
+  | 'flower_bed'
+  | 'bench'
+  | 'lamp_post'
+  | 'fountain'
+  | 'statue'
+  | 'village_green'
+  | 'theatre';
 
 const b = (d: BuildingDef): BuildingDef => d;
 
@@ -1281,6 +1300,131 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     tier: 2,
     fireRisk: 0,
     desc: "+80 % de vitesse. Les porteurs traversent la cité en un rien de temps.",
+  }),
+
+  // ── Ornament and leisure ────────────────────────────────────────────────
+  // Beauty is a mechanic here: a villager's happiness is the sum of what is
+  // within walking distance of where they live, and these are the cheapest
+  // way to raise it. They are small on purpose, so the player tucks them into
+  // the gaps a village naturally leaves.
+  flower_bed: b({
+    id: 'flower_bed',
+    name: 'Parterre de fleurs',
+    category: 'service',
+    size: [1, 1],
+    cost: {},
+    goldCost: 18,
+    buildWork: 10,
+    workers: 0,
+    profession: 'idle',
+    placement: { kind: 'land' },
+    requires: 'r_village_adornment',
+    service: { kind: 'decor', radius: 7, strength: 0.55 },
+    tier: 1,
+    fireRisk: 0,
+    desc: 'Quelques fleurs devant la porte. Rien de plus, et pourtant ça compte.',
+  }),
+  bench: b({
+    id: 'bench',
+    name: 'Banc',
+    category: 'service',
+    size: [1, 1],
+    cost: { planks: 4 },
+    goldCost: 12,
+    buildWork: 12,
+    workers: 0,
+    profession: 'idle',
+    placement: { kind: 'land' },
+    requires: 'r_village_adornment',
+    service: { kind: 'decor', radius: 6, strength: 0.5 },
+    tier: 1,
+    fireRisk: 0,
+    desc: "Un endroit où s'asseoir au soleil en attendant la fin de la journée.",
+  }),
+  village_green: b({
+    id: 'village_green',
+    name: 'Place du village',
+    category: 'service',
+    size: [3, 3],
+    cost: { planks: 10, stone: 8 },
+    goldCost: 60,
+    buildWork: 55,
+    workers: 0,
+    profession: 'idle',
+    placement: { kind: 'land' },
+    requires: 'r_village_adornment',
+    service: { kind: 'leisure', radius: 16, strength: 0.9 },
+    tier: 1,
+    fireRisk: 0,
+    desc: "Un tilleul, de l'herbe tondue et de quoi s'asseoir. On s'y retrouve le soir.",
+  }),
+  lamp_post: b({
+    id: 'lamp_post',
+    name: 'Lampadaire',
+    category: 'service',
+    size: [1, 1],
+    cost: { planks: 3, iron_ingot: 1 },
+    goldCost: 30,
+    buildWork: 18,
+    workers: 0,
+    profession: 'idle',
+    placement: { kind: 'land' },
+    requires: 'r_civic_pride',
+    service: { kind: 'decor', radius: 8, strength: 0.6 },
+    tier: 2,
+    fireRisk: 0,
+    desc: 'Les rues cessent d’être noires à la nuit tombée.',
+  }),
+  fountain: b({
+    id: 'fountain',
+    name: 'Fontaine',
+    category: 'service',
+    size: [2, 2],
+    cost: { stone: 30, planks: 6 },
+    goldCost: 180,
+    buildWork: 90,
+    workers: 0,
+    profession: 'idle',
+    placement: { kind: 'land' },
+    requires: 'r_civic_pride',
+    service: { kind: 'decor', radius: 14, strength: 1.3 },
+    tier: 2,
+    fireRisk: 0,
+    desc: "De l'eau courante au milieu de la place. Elle sert aussi contre le feu.",
+  }),
+  statue: b({
+    id: 'statue',
+    name: 'Statue',
+    category: 'service',
+    size: [1, 1],
+    cost: { stone: 24 },
+    goldCost: 260,
+    buildWork: 80,
+    workers: 0,
+    profession: 'idle',
+    placement: { kind: 'land' },
+    requires: 'r_civic_pride',
+    service: { kind: 'decor', radius: 12, strength: 1.1 },
+    tier: 2,
+    fireRisk: 0,
+    desc: 'À la gloire de quelqu’un dont plus personne ne se souvient. On l’aime bien.',
+  }),
+  theatre: b({
+    id: 'theatre',
+    name: 'Théâtre de tréteaux',
+    category: 'service',
+    size: [3, 3],
+    cost: { planks: 30, cloth: 8 },
+    goldCost: 240,
+    buildWork: 140,
+    workers: 2,
+    profession: 'innkeeper',
+    placement: { kind: 'land' },
+    requires: 'r_civic_pride',
+    service: { kind: 'leisure', radius: 22, strength: 1.5 },
+    tier: 2,
+    fireRisk: 0.8,
+    desc: 'Des planches, des tréteaux et deux comédiens. Le plus gros apport de bonheur du jeu.',
   }),
 };
 

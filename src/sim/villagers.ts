@@ -344,7 +344,17 @@ export function happinessTarget(world: World, v: Villager): number {
     h -= 24;
   }
 
-  if (v.workId === 0 && v.profession !== 'child') h -= 6;
+  // Work. Being idle is dispiriting; a job at a workshop that is actually
+  // running is the opposite. The design says happiness comes from taxes, work,
+  // home and leisure — this is the "work" term, and it was missing.
+  if (v.profession === 'child') {
+    h += 4;
+  } else if (v.workId === 0) {
+    h -= 6;
+  } else {
+    const work = world.buildings.get(v.workId);
+    h += work && !work.stall ? 7 : 2;
+  }
   h += taxHappiness(world);
   if (v.sick > 0) h -= 20;
   if (world.weather === 'rain') h -= 4;

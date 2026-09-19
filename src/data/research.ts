@@ -57,6 +57,7 @@ export type ResearchId =
   | 'r_carpentry'
   | 'r_husbandry_fowl'
   | 'r_lumber_camp'
+  | 'r_village_adornment'
   // ── Era 3 : métiers et échanges ───────────────────────────────────────
   | 'r_weaving'
   | 'r_tanning'
@@ -78,6 +79,7 @@ export type ResearchId =
   | 'r_trade_routes'
   | 'r_firewatch'
   | 'r_herbalism'
+  | 'r_civic_pride'
   // ── Era 5 : la cité ───────────────────────────────────────────────────
   | 'r_gold_prospecting'
   | 'r_goldsmithing'
@@ -269,6 +271,19 @@ export const RESEARCH: Record<ResearchId, ResearchDef> = {
       { kind: 'gather_yield', profession: 'woodcutter', mul: 1.15 },
     ],
     desc: 'Scies longues et chevaux de débardage. Vos camps de bûcherons peuvent devenir de vraies exploitations.',
+  }),
+
+  r_village_adornment: r({
+    id: 'r_village_adornment',
+    name: 'Embellissement',
+    branch: 'city',
+    tier: 2,
+    icon: 'flower',
+    cost: 140,
+    duration: 110,
+    unlocks: ['flower_bed', 'bench', 'village_green'],
+    effects: [{ kind: 'happiness', add: 1 }],
+    desc: "Des fleurs, un banc, un tilleul sur la place : le bonheur d'un villageois est la somme de ce qui l'entoure, et c'est ce que ça coûte le moins cher à améliorer.",
   }),
 
   // ══ Era 3 ═══════════════════════════════════════════════════════════════
@@ -504,6 +519,19 @@ export const RESEARCH: Record<ResearchId, ResearchDef> = {
     unlocks: ['healer_hut'],
     effects: [{ kind: 'disease_resist', mul: 0.6 }],
     desc: 'Décoctions et cataplasmes : les épidémies deviennent une contrariété, plus un drame.',
+  }),
+
+  r_civic_pride: r({
+    id: 'r_civic_pride',
+    name: 'Fierté civique',
+    branch: 'city',
+    tier: 4,
+    icon: 'fountain',
+    cost: 820,
+    duration: 250,
+    unlocks: ['lamp_post', 'fountain', 'statue', 'theatre'],
+    effects: [{ kind: 'happiness', add: 2 }],
+    desc: 'Une fontaine, des lampadaires, une statue et des comédiens sur des tréteaux. Ce qui sépare un gros bourg d’une ville où l’on a envie de vivre.',
   }),
 
   // ══ Era 5 ═══════════════════════════════════════════════════════════════

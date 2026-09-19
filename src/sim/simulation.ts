@@ -97,7 +97,9 @@ export class Simulation {
       rescueIfTrapped(w, v);
       updateVillagerNeeds(w, v, dt);
       updateVillager(w, v, dt);
+      w.desirePaths.record(w, v, dt);
     }
+    w.desirePaths.update(w, dt);
 
     updateHouseholdConsumption(w, dt);
     updateNature(w, dt);

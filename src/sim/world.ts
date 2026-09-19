@@ -12,6 +12,7 @@ import { createPartnerRuntime, type PartnerRuntime } from './economy';
 import { TRADE_PARTNERS } from '../data/trade';
 import { DAWN, DUSK } from './clock';
 import { History, type LedgerSource } from './history';
+import { DesirePaths } from './paths';
 import { TileMap } from './tilemap';
 import {
   SEASONS,
@@ -44,6 +45,9 @@ export interface WorldEvents {
   eventEnded: ActiveEvent;
   tierUp: { tier: number };
 }
+
+/** How much a doorway prefers each road level: bare, dirt, cobble, worn. */
+const ROAD_PREFERENCE = [0, 2, 3, 1];
 
 export interface PlacementCheck {
   ok: boolean;
@@ -87,6 +91,8 @@ export class World {
   treasury = 120;
   /** Every coin in and out, tagged by source, plus the rolling curves. */
   history = new History();
+  /** Tracks footfall and turns well-trodden ground into trails. */
+  desirePaths = new DesirePaths();
   contracts: TradeContract[] = [];
   activeEvents: ActiveEvent[] = [];
   notifications: Notification[] = [];
@@ -775,8 +781,11 @@ export class World {
     let bestScore = -Infinity;
     for (const [x, y] of candidates) {
       if (!this.map.walkable(x, y)) continue;
-      // Prefer roads, then tiles closest to the village centre of mass.
-      const score = this.map.road[this.map.idx(x, y)] * 4 - Math.abs(x - b.cx) - Math.abs(y - b.cy);
+      // Prefer the best-made road, then tiles closest to the centre of mass.
+      // A worn trail (level 3) is the *weakest* surface, not the strongest, so
+      // the raw level cannot be used as a score.
+      const surface = ROAD_PREFERENCE[this.map.road[this.map.idx(x, y)]] ?? 0;
+      const score = surface * 4 - Math.abs(x - b.cx) - Math.abs(y - b.cy);
       if (score > bestScore) {
         bestScore = score;
         best = [x, y];
@@ -895,6 +904,16 @@ export class World {
               break;
             case 'fire':
               this.fireField[i] += value * 0.8;
+              break;
+            case 'decor':
+              // Small, cheap and stackable: the player decorates a quarter and
+              // watches the morale of everyone living there climb.
+              this.happinessField[i] += Math.min(7, value * 6);
+              // A fountain is a water source as much as an ornament.
+              if (def.id === 'fountain') this.fireField[i] += value * 0.4;
+              break;
+            case 'leisure':
+              this.happinessField[i] += Math.min(14, value * 11);
               break;
             default:
               break;

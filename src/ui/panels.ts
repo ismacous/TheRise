@@ -334,6 +334,13 @@ const BUILDING_GLYPH: Partial<Record<BuildingId, IconName>> = {
   healer_hut: 'heart',
   dirt_path: 'cart',
   cobbled_road: 'cart',
+  flower_bed: 'star',
+  bench: 'heart',
+  lamp_post: 'sun',
+  fountain: 'water',
+  statue: 'star',
+  village_green: 'tree',
+  theatre: 'flag',
 };
 
 /** Accent colour per category, so two "box" marks never read as one thing. */
@@ -1878,6 +1885,42 @@ function renderSettings(api: GameApi, body: HTMLElement, refresh: Refresh): void
     el('div', {
       class: 'card-desc',
       text: 'Économe désactive les ombres et la météo. Utile si la batterie chauffe.',
+    }),
+  );
+
+  // ── Sound ───────────────────────────────────────────────────────────────
+  body.append(el('div', { class: 'section-title', text: 'Son' }));
+  const muteBtn = el('button', {
+    class: `btn ${api.sound.muted ? '' : 'primary'}`,
+    text: api.sound.muted ? 'Activer le son' : 'Couper le son',
+  });
+  onTap(muteBtn, () => {
+    api.sound.setMuted(!api.sound.muted);
+    if (!api.sound.muted) api.sound.play('tap');
+    refresh();
+  });
+  body.append(el('div', { class: 'btn-row' }, [muteBtn]));
+
+  const volume = el('input', {
+    class: 'slider',
+    type: 'range',
+    min: '0',
+    max: '100',
+    step: '5',
+  }) as HTMLInputElement;
+  volume.value = String(Math.round(api.sound.volume * 100));
+  volume.disabled = api.sound.muted;
+  volume.addEventListener('input', () => api.sound.setVolume(Number(volume.value) / 100));
+  volume.addEventListener('change', () => api.sound.play('tap'));
+  body.append(
+    el('div', { class: 'slider-row' }, [
+      el('span', { class: 'qty', text: 'Bas' }),
+      volume,
+      el('span', { class: 'qty', text: 'Fort' }),
+    ]),
+    el('div', {
+      class: 'card-desc',
+      text: "Tout est synthétisé à la volée : le vent, la pluie, les oiseaux, la hache du bûcheron et la cloche du matin. Aucun fichier audio dans l'APK.",
     }),
   );
 

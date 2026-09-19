@@ -37,7 +37,11 @@ export const TERRAIN = {
   WATER: 5 as TerrainType,
 };
 
-export type RoadLevel = 0 | 1 | 2;
+/**
+ * 0 bare ground, 1 dirt path, 2 cobbled road, 3 a trail worn by feet.
+ * A worn trail is the one the player never laid: see `sim/paths.ts`.
+ */
+export type RoadLevel = 0 | 1 | 2 | 3;
 
 export interface ResourceNode {
   id: number;

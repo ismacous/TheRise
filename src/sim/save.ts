@@ -6,6 +6,7 @@ import type { Building, ResourceNode, Villager } from './types';
 import type { WorldGenOptions } from './worldgen';
 import { createPartnerRuntime } from './economy';
 import { History } from './history';
+import { DesirePaths } from './paths';
 import { TRADE_PARTNERS } from '../data/trade';
 
 /**
@@ -48,8 +49,10 @@ export interface SaveData {
   buildings: Building[];
   villagers: Villager[];
   nodes: NodeDiff;
-  /** Sparse road paint: [tileIndex, level]. */
+  /** Sparse road paint: [tileIndex, level]. Level 3 is a worn trail. */
   roads: Array<[number, number]>;
+  /** Accumulated footfall behind those trails: [tileIndex, wear]. */
+  wear: Array<[number, number]>;
   contracts: unknown[];
   partners: Array<[string, { stock: Record<string, number>; demand: Record<string, number>; relation: number }]>;
   events: unknown[];
@@ -105,6 +108,7 @@ export function serialize(sim: Simulation, gen: Partial<WorldGenOptions>): SaveD
     villagers: w.villagers.map((v) => ({ ...v, path: null })),
     nodes: { removed, changed, added },
     roads,
+    wear: w.desirePaths.toJSON(),
     contracts: w.contracts.map((c) => ({ ...c })),
     partners: [...w.partners.entries()].map(([id, rt]) => [
       id,
@@ -152,6 +156,7 @@ export function deserialize(data: SaveData): Simulation {
   // ── Roads ───────────────────────────────────────────────────────────────
   w.map.road.fill(0);
   for (const [i, level] of data.roads) w.map.road[i] = level;
+  w.desirePaths = DesirePaths.fromJSON(data.wear);
 
   // ── Buildings ───────────────────────────────────────────────────────────
   w.buildings.clear();

@@ -62,6 +62,21 @@ Deux verrous, et deux seulement :
   3 400 pour la charte de guilde. C'est l'impôt qui paie la recherche, ce qui
   relie directement la politique fiscale à la vitesse de progression.
 
+### D'où vient le bonheur
+
+Quatre sources, et le design ne fonctionne que si les quatre comptent :
+
+| Source | Ce qui la porte |
+|---|---|
+| **Le foyer** | Avoir un lit (−24 sans), le confort du logement, la promiscuité |
+| **Le travail** | +7 pour un poste dans un atelier qui tourne, +2 s'il est à l'arrêt, −6 sans emploi |
+| **L'impôt** | ±13 selon le taux, réglé à l'hôtel de ville |
+| **Les loisirs** | Marché, chapelle, taverne, **ornements et lieux de loisir** (voir §7 bis) |
+
+S'y ajoutent la variété de l'assiette, la satiété, la maladie, la météo et la
+saison. Le terme « travail » manquait : occuper un poste évitait seulement une
+pénalité, il n'apportait rien.
+
 ### Les deux ressources abstraites
 
 | | Source | Sert à |
@@ -253,6 +268,51 @@ une guérison en quatre minutes : chaque malade mourait sans exception.
 
 Le risque d'incendie dépend du bâtiment (charbonnière et fonderie en tête), de
 la saison, de la météo et de la couverture en puits.
+
+---
+
+## 7 bis. Ce qui rend le village vivant
+
+### Les chemins d'usure
+
+Personne ne trace la piste entre le camp de bûcherons et l'entrepôt : elle
+apparaît parce que les mêmes pieds traversent la même herbe quelques centaines
+de fois. Chaque villageois qui **marche** (pas qui flâne) dépose de l'usure sur
+sa case ; au-delà d'un seuil la case devient un **sentier d'usure**, un
+quatrième niveau de route (`sim/paths.ts`). Quand le passage cesse, l'herbe
+reprend.
+
+- Le sentier d'usure donne un bonus de vitesse **plus faible** qu'un sentier
+  posé à la main : « Sentiers battus » reste une étude utile.
+- Une case qui devient sentier en ensemence légèrement ses voisines, sinon le
+  chemin reste une ligne d'une case que personne ne voit à la distance de jeu.
+- Le coût est d'une entrée de `Map` par case réellement foulée — quelques
+  dizaines, pas les quarante mille cases de la carte. Mesuré : sous le bruit
+  de mesure.
+
+### Les ornements et les loisirs
+
+Deux nouvelles familles de service alimentent le champ de bonheur :
+
+| | Exemples | Portée | Étude |
+|---|---|---|---|
+| `decor` | Parterre, banc, lampadaire, fontaine, statue | 6 à 14 | Embellissement (ère 2), Fierté civique (ère 4) |
+| `leisure` | Place du village, théâtre de tréteaux | 16 à 22 | idem |
+
+Le bonheur décroît avec la distance, donc **plus on habite près, plus on est
+heureux** — c'est ce qui donne un intérêt à remplir les creux d'un quartier
+plutôt qu'à poser un seul gros bâtiment.
+
+### Le son
+
+Tout est synthétisé à la volée en Web Audio (`render/audio.ts`) : **aucun
+fichier audio**, pour la même raison qu'aucun `.glb`. Le vent est du bruit
+filtré, la pluie le même bruit plus brillant, un oiseau deux balayages de
+sinus, la hache une salve de bruit dans un passe-bande. Le moteur reste
+dormant tant que le joueur n'a pas touché l'écran (les navigateurs l'exigent)
+et se coupe depuis les options. Les sons de travail sont tirés au sort parmi
+les bâtiments visibles, un toutes les demi-secondes environ : un village
+entier ne coûte pas plus cher qu'un seul atelier.
 
 ---
 

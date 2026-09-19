@@ -520,6 +520,123 @@ function make(defId: BuildingId, state: BuildingState, lv: number): BuildingVisu
       addTradeSign(b, W, D, new Color('#5f8a76').convertSRGBToLinear(), 'cross');
       break;
 
+    // ── Ornament and leisure ─────────────────────────────────────────────
+    case 'flower_bed':
+      addFlowerBed(b, 0, 0, 0);
+      addFlowerBed(b, 0, -0.34, 2);
+      out.lights = [];
+      out.height = 0.4;
+      break;
+    case 'bench': {
+      const slatColor = lv >= 2 ? C.wallWood : C.frame;
+      b.boxOn(0, 0.28, 0, 1.0, 0.07, 0.3, slatColor);
+      b.boxOn(0, 0.44, -0.14, 1.0, 0.28, 0.06, slatColor);
+      for (const sx of [-1, 1]) {
+        b.boxOn(sx * 0.38, 0, 0, 0.07, 0.3, 0.26, C.beam);
+        b.boxOn(sx * 0.38, 0.28, -0.14, 0.07, 0.46, 0.06, C.beam);
+      }
+      if (lv >= 3) addFlowerBed(b, 0, 0.42, 1);
+      out.lights = [];
+      out.height = 0.8;
+      break;
+    }
+    case 'lamp_post':
+      b.cylinder(0, 0, 0, 0.16, 0.14, 8, C.wallStone);
+      b.cylinder(0, 0.14, 0, 0.055, 1.5 + (lv - 1) * 0.2, 6, C.metal);
+      b.box(0, 1.72 + (lv - 1) * 0.2, 0, 0.26, 0.3, 0.26, C.metal);
+      b.blob(0, 1.72 + (lv - 1) * 0.2, 0, 0.09, 0.1, 0.09, new Color('#ffd16a').convertSRGBToLinear());
+      b.cone(0, 1.87 + (lv - 1) * 0.2, 0, 0.19, 0.16, 4, C.metal, Math.PI / 4);
+      out.lights = [
+        {
+          x: 0,
+          y: 1.72 + (lv - 1) * 0.2,
+          z: 0,
+          color: new Color('#ffcf7a'),
+          intensity: 1.5 + (lv - 1) * 0.3,
+        },
+      ];
+      out.height = 2.1;
+      break;
+    case 'fountain': {
+      const r = Math.min(W, D) * 0.42;
+      b.cylinder(0, 0, 0, r, 0.34, 10, C.wallStone);
+      b.cylinder(0, 0.3, 0, r - 0.12, 0.08, 10, new Color('#4a8ba8').convertSRGBToLinear());
+      b.cylinder(0, 0.34, 0, 0.16, 0.5 + (lv - 1) * 0.2, 8, C.wallStoneDark);
+      b.cylinder(0, 0.84 + (lv - 1) * 0.2, 0, r * 0.5, 0.07, 10, C.wallStone);
+      // The jet, as a tapered spike of pale water.
+      b.cone(0, 0.9 + (lv - 1) * 0.2, 0, 0.09, 0.42, 6, new Color('#9fd6e8').convertSRGBToLinear());
+      if (lv >= 3) {
+        for (const sx of [-1, 1]) addFlowerBed(b, sx * (r + 0.45), 0, 1);
+      }
+      out.lights = [];
+      out.height = 1.5;
+      break;
+    }
+    case 'statue':
+      b.boxOn(0, 0, 0, 0.7, 0.24, 0.7, C.wallStoneDark);
+      b.boxOn(0, 0.24, 0, 0.5, 0.42, 0.5, C.wallStone);
+      // A figure, roughed out: legs, robe, shoulders, head.
+      b.cylinder(0, 0.66, 0, 0.19, 0.62, 7, C.wallStone, 0.78);
+      b.box(0, 1.4, 0, 0.44, 0.1, 0.18, C.wallStone);
+      b.blob(0, 1.52, 0, 0.12, 0.14, 0.12, C.wallStone);
+      if (lv >= 2) b.blob(0, 1.66, 0, 0.13, 0.05, 0.13, C.gold);
+      if (lv >= 3) {
+        for (const sx of [-1, 1]) b.cylinder(sx * 0.55, 0, 0, 0.06, 0.6, 6, C.beam);
+      }
+      out.lights = [];
+      out.height = 1.8;
+      break;
+    case 'village_green': {
+      const w = W - 0.3;
+      const d = D - 0.3;
+      b.box(0, -0.03, 0, w, 0.08, d, new Color('#7fb04c').convertSRGBToLinear());
+      // A lime tree in the middle, benches round the edge.
+      b.cylinder(0, 0, 0, 0.16, 1.0, 6, C.beam);
+      b.blob(0, 1.5, 0, 0.9, 0.7, 0.9, new Color('#4f9140').convertSRGBToLinear(), 1);
+      b.blob(0.45, 1.15, -0.3, 0.5, 0.42, 0.5, new Color('#589b46').convertSRGBToLinear(), 1);
+      for (const sz of [-1, 1]) {
+        b.boxOn(0, 0.26, (sz * d) / 2 - sz * 0.35, 1.1, 0.07, 0.28, C.wallWood);
+        for (const sx of [-1, 1]) {
+          b.boxOn(sx * 0.42, 0, (sz * d) / 2 - sz * 0.35, 0.07, 0.28, 0.24, C.beam);
+        }
+      }
+      addFlowerBed(b, -w / 2 + 0.6, d / 2 - 0.5, 0);
+      addFlowerBed(b, w / 2 - 0.6, -d / 2 + 0.5, 2);
+      if (lv >= 2) b.cylinder(-w / 2 + 0.5, 0, -d / 2 + 0.5, 0.05, 1.3, 6, C.beam);
+      out.lights.push({ x: 0, y: 0.5, z: 0, color: new Color('#ffcf7a'), intensity: 0.6 });
+      out.height = 2.3;
+      break;
+    }
+    case 'theatre': {
+      const w = W - 0.4;
+      const d = D - 0.4;
+      // A trestle stage, a painted backdrop and bunting.
+      b.boxOn(0, 0.45, -d * 0.1, w, 0.1, d * 0.6, C.wallWood);
+      for (const sx of [-1, 1]) {
+        for (const sz of [-1, 1]) {
+          b.boxOn(sx * (w / 2 - 0.2), 0, -d * 0.1 + sz * (d * 0.26), 0.1, 0.45, 0.1, C.beam);
+        }
+      }
+      b.boxOn(0, 0.55, -d / 2 + 0.2, w, 1.5 + (lv - 1) * 0.25, 0.1, C.clothBlue);
+      for (const sx of [-1, 1]) {
+        b.boxOn(sx * (w / 2 - 0.1), 0.55, -d / 2 + 0.3, 0.12, 1.6, 0.5, C.clothRed);
+        b.cylinder(sx * (w / 2 + 0.1), 0, d / 2 - 0.3, 0.06, 2.0, 6, C.beam);
+      }
+      // Bunting between the poles, and benches for the audience.
+      for (let i = -2; i <= 2; i++) {
+        b.cone(i * (w / 5), 1.75, d / 2 - 0.3, 0.09, 0.2, 3, [C.clothRed, C.gold, C.clothBlue][(i + 2) % 3], Math.PI);
+      }
+      for (let row = 0; row < 2; row++) {
+        b.boxOn(0, 0.22, d / 2 - 0.7 - row * 0.5, w * 0.8, 0.07, 0.24, C.wallWood);
+        for (const sx of [-1, 1]) {
+          b.boxOn(sx * w * 0.32, 0, d / 2 - 0.7 - row * 0.5, 0.07, 0.24, 0.2, C.beam);
+        }
+      }
+      out.lights.push({ x: 0, y: 0.9, z: 0, color: new Color('#ffb04a'), intensity: 1.4 });
+      out.height = 2.4 + (lv - 1) * 0.25;
+      break;
+    }
+
     default:
       out.height = buildHut(b, W, D, C.wallWood, C.roofThatch, out, 0.9, false);
       break;

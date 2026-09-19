@@ -1,6 +1,7 @@
 import {
   BufferAttribute,
   BufferGeometry,
+  Color,
   Group,
   Mesh,
   MeshLambertMaterial,
@@ -10,6 +11,9 @@ import { Rng, ValueNoise2D } from '../core/rng';
 import type { TileMap } from '../sim/tilemap';
 import { TERRAIN } from '../sim/types';
 import { CHUNK, HEIGHT_SCALE } from './constants';
+
+/** Scratch colour for worn trails, so a chunk rebuild allocates nothing. */
+const WORN = new Color();
 import type { SeasonPalette } from './palette';
 
 /**
@@ -99,6 +103,9 @@ export class TerrainRenderer {
     let col;
     if (road === 2) col = p.rock;
     else if (road === 1) col = p.dirt;
+    // A worn trail is not a path somebody laid: it is the grass losing, so it
+    // reads as a pale scuff between the meadow and bare earth.
+    else if (road === 3) col = WORN.copy(p.grass).lerp(p.dirt, 0.8);
     else if (t === TERRAIN.WATER) col = p.waterDeep;
     else if (t === TERRAIN.SAND) col = p.sand;
     else if (t === TERRAIN.ROCK) col = mix > 0.55 ? p.rockAlt : p.rock;

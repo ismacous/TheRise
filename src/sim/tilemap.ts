@@ -81,6 +81,9 @@ export class TileMap {
     const r = this.road[i] as RoadLevel;
     if (r === 2) return 0.55;
     if (r === 1) return 0.74;
+    // A trail beaten through the grass helps, but far less than a laid path:
+    // it must not make "Sentiers battus" pointless to study.
+    if (r === 3) return 0.9;
     const t = this.terrain[i];
     if (t === TERRAIN.ROCK) return 1.25;
     if (t === TERRAIN.SAND) return 1.15;

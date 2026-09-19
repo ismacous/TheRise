@@ -61,6 +61,14 @@ export interface GameApi {
 
   quality: QualityLevel;
   setQuality(q: QualityLevel): void;
+  /** Ambience, work sounds and event stingers, all synthesised on the fly. */
+  readonly sound: {
+    muted: boolean;
+    volume: number;
+    setMuted(muted: boolean): void;
+    setVolume(volume: number): void;
+    play(name: 'tap' | 'good' | 'bad' | 'coin' | 'built' | 'bell'): void;
+  };
   showDebug: boolean;
   /** Refresh hook so panels can ask the shell to redraw immediately. */
   requestUiRefresh(): void;

@@ -1,5 +1,6 @@
 import { BUILDINGS, type BuildingId, type NodeKind } from './data/buildings';
 import { GameRenderer, QUALITY_PRESETS, type RenderQuality } from './render/renderer';
+import { SoundEngine } from './render/audio';
 import { HEIGHT_SCALE } from './render/constants';
 import { createNewGame, type Simulation } from './sim/simulation';
 import { deserialize, readSave, writeSave } from './sim/save';
@@ -52,6 +53,7 @@ export class Game implements GameApi {
   openSheetId: SheetId | null = null;
   quality: QualityLevel;
   showDebug = false;
+  readonly sound = new SoundEngine();
 
   private canvas: HTMLCanvasElement;
   private genOptions: Partial<WorldGenOptions>;
@@ -73,6 +75,31 @@ export class Game implements GameApi {
     this.wireMinimap();
     this.wireInput();
     this.wireLifecycle();
+    this.wireSound();
+  }
+
+  /**
+   * Browsers will not start an AudioContext until the player has touched the
+   * screen, so the engine stays dormant until the first real gesture.
+   */
+  private wireSound(): void {
+    const unlock = (): void => this.sound.unlock();
+    for (const type of ['pointerdown', 'keydown'] as const) {
+      window.addEventListener(type, unlock, { passive: true });
+    }
+    this.wireSoundEvents();
+  }
+
+  private wireSoundEvents(): void {
+    const w = this.world;
+    w.emitter.on('buildingCompleted', () => this.sound.play('built', 0.35));
+    w.emitter.on('researchCompleted', () => this.sound.play('good', 0.4));
+    w.emitter.on('tierUp', () => this.sound.play('bell', 0.55));
+    w.emitter.on('eventStarted', (e) => {
+      if (e.kind === 'fire') this.sound.play('alarm', 0.5);
+      else if (e.tone === 'good') this.sound.play('good', 0.35);
+      else if (e.tone === 'bad') this.sound.play('bad', 0.35);
+    });
   }
 
   get world(): World {
@@ -357,6 +384,7 @@ export class Game implements GameApi {
     this.ui = new UiShell(uiRoot, this);
     this.wireMinimap();
     this.wireInput();
+    this.wireSoundEvents();
     this.closeSheet();
   }
 
@@ -392,6 +420,8 @@ export class Game implements GameApi {
       this.ui.minimap.markTerrainDirty();
     }
     this.renderer.update(dt, this.sim.alpha);
+    const controls = this.renderer.controls;
+    this.sound.update(this.world, dt, controls.target.x, controls.target.z, controls.distance * 0.8);
     this.updateSelectionMarkers();
     this.updateGhost();
     this.renderer.render();

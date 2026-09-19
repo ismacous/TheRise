@@ -15,6 +15,10 @@ date ; c'est l'ordre dans lequel les ajouts auraient le plus de valeur.
 - Page Économie : courbes des recettes, dépenses, trésor, bonheur, population
   et vivres sur une année de jeu, avec la ventilation de chaque pièce gagnée
   ou dépensée par source
+- Chemins d'usure : les routes se tracent toutes seules là où l'on marche
+- Ornements et lieux de loisir : parterres, bancs, lampadaires, fontaine,
+  statue, place du village, théâtre de tréteaux
+- Ambiance sonore entièrement synthétisée (vent, pluie, oiseaux, métiers)
 - Sauvegarde automatique, trois niveaux de qualité, APK produit par CI
 
 ## Ensuite — confort de jeu
@@ -35,20 +39,18 @@ date ; c'est l'ordre dans lequel les ajouts auraient le plus de valeur.
    confort qui ne dépend pas des troupeaux.
 7. **Pont et gué.** Franchir les rivières change complètement la lecture de la
    carte et la logistique.
-8. **Décoration.** Fontaines, arbres plantés, statues : du bonheur contre de
-   l'or, pour ceux qui aiment embellir.
-9. **Météo saisonnière plus marquée.** Gel qui arrête les champs, crues qui
+8. **Météo saisonnière plus marquée.** Gel qui arrête les champs, crues qui
     coupent les routes.
 
 ## Ensuite — profondeur
 
-10. **Spécialisation des villageois.** Un bûcheron qui coupe depuis dix jours
+9. **Spécialisation des villageois.** Un bûcheron qui coupe depuis dix jours
     travaille plus vite. Donne du poids au fait de ne pas tout réorganiser.
-11. **Classes sociales.** Les demeures veulent du mobilier et des chandelles,
+10. **Classes sociales.** Les demeures veulent du mobilier et des chandelles,
     sous peine de retour à l'état de maison — le cœur de *Foundation*.
-12. **Contrats commerciaux.** Livrer 200 planches en dix jours contre une forte
+11. **Contrats commerciaux.** Livrer 200 planches en dix jours contre une forte
     somme. Un objectif chiffré qui structure une partie entière.
-13. **Fêtes de village.** Dépenser de la bière et de la nourriture pour un pic
+12. **Fêtes de village.** Dépenser de la bière et de la nourriture pour un pic
     de bonheur, une fois par saison.
 
 ## Volontairement écarté
