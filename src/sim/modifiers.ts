@@ -18,6 +18,10 @@ export interface Modifiers {
   diseaseResist: number;
   buildSpeed: number;
   storage: number;
+  /** False until the tax register is studied: no tax, and no tax panel. */
+  taxation: boolean;
+  /** Highest in-place level a building may be improved to. */
+  buildingLevel: number;
 }
 
 export function emptyModifiers(): Modifiers {
@@ -38,6 +42,8 @@ export function emptyModifiers(): Modifiers {
     diseaseResist: 1,
     buildSpeed: 1,
     storage: 1,
+    taxation: false,
+    buildingLevel: 1,
   };
 }
 
@@ -94,6 +100,12 @@ export function computeModifiers(completed: Iterable<ResearchId>): Modifiers {
           break;
         case 'storage':
           m.storage *= e.mul;
+          break;
+        case 'taxation':
+          m.taxation = true;
+          break;
+        case 'building_level':
+          m.buildingLevel = Math.max(m.buildingLevel, e.value);
           break;
       }
     }

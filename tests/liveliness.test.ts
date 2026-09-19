@@ -7,6 +7,7 @@ import { ALL_RESEARCH_IDS } from '../src/data/research';
 import { CROP_STAGES, cropStage } from '../src/render/buildings';
 import { collectRadius, maxLevelOf, workerSlots } from '../src/sim/levels';
 import { rebuildHaulJobs } from '../src/sim/logistics';
+import { computeModifiers } from '../src/sim/modifiers';
 import type { World } from '../src/sim/world';
 
 function run(sim: Simulation, seconds: number): void {
@@ -26,6 +27,9 @@ function fund(w: World): void {
   for (const good of ['stone', 'planks', 'logs'] as const) w.addToStock(good, 400);
   w.refreshStockCache();
   for (const id of ALL_RESEARCH_IDS) w.research.completed.add(id);
+  // Adding to the set is not enough: the modifiers are what the rest of the
+  // simulation reads, and the level ceiling now lives in there.
+  w.modifiers = computeModifiers(w.research.completed);
 }
 
 /** First legal spot for `def`, spiralling out from a point. */

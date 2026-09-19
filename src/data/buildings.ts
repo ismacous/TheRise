@@ -116,7 +116,14 @@ export interface BuildingDef {
    * which this depot's own staff go out to fetch finished goods from the
    * workshops instead of waiting for somebody to bring them.
    */
-  storage?: { capacity: number; accepts?: GoodId[]; global?: boolean; collect?: number };
+  storage?: {
+    capacity: number;
+    accepts?: GoodId[];
+    global?: boolean;
+    collect?: number;
+    /** Capacity stays put whatever the building's level. */
+    fixed?: boolean;
+  };
   /** Pasture animals raised on site. */
   livestock?: { animal: 'chicken' | 'sheep' | 'cattle'; capacity: number };
   upgradesTo?: BuildingId;
@@ -174,6 +181,7 @@ export type BuildingId =
   | 'tannery'
   | 'cobbler'
   | 'carpenter'
+  | 'builders_yard'
   | 'fletcher'
   | 'chandlery'
   | 'market'
@@ -211,10 +219,13 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     workers: 3,
     profession: 'carrier',
     placement: { kind: 'land' },
-    storage: { capacity: 400, global: true },
+    // Fixed on purpose: `fixed` keeps this capacity whatever the hall's level.
+    // It is the help you get on day one, not a warehouse — and a hall that
+    // grew into one removed any reason to build a real depot.
+    storage: { capacity: 200, global: true, fixed: true },
     tier: 1,
     fireRisk: 0.3,
-    desc: "Le cœur du village. Abrite les premières réserves et attire les nouveaux venus.",
+    desc: "Le cœur du village. Deux cents places de réserve, ni plus ni moins quel que soit son niveau : de quoi démarrer, pas de quoi se passer d'un entrepôt.",
   }),
 
   // ── Housing ─────────────────────────────────────────────────────────────
@@ -1081,6 +1092,25 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     tier: 1,
     fireRisk: 1.4,
     desc: "Meubles pour les foyers. Une maison meublée vaut deux maisons vides.",
+  }),
+  builders_yard: b({
+    id: 'builders_yard',
+    name: 'Loge des charpentiers',
+    category: 'civic',
+    size: [3, 3],
+    cost: { planks: 16, logs: 10 },
+    goldCost: 60,
+    buildWork: 80,
+    workers: 4,
+    profession: 'builder',
+    placement: { kind: 'land' },
+    requires: 'r_master_builders',
+    // No recipe: what the yard produces is buildings. Its workers go straight
+    // to whatever site needs hands, and carry goods about when there is none.
+    storage: { capacity: 80, accepts: ['planks', 'logs', 'stone', 'bricks'] },
+    tier: 1,
+    fireRisk: 0.9,
+    desc: "Une loge, des échafaudages et des gens dont c'est le métier. Sans elle, un chantier n'avance que si quelqu'un est désœuvré — et dans un village qui tourne, personne ne l'est jamais.",
   }),
   fletcher: b({
     id: 'fletcher',

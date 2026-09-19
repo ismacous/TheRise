@@ -15,8 +15,8 @@ import { TRADE_PARTNERS } from '../data/trade';
  * A version 5 village would load with a founding cohort already past working
  * age and a larder sized for the old two-minute day.
  */
-export const SAVE_VERSION = 6;
-export const SAVE_KEY = 'therise.save.v6';
+export const SAVE_VERSION = 7;
+export const SAVE_KEY = 'therise.save.v7';
 
 interface NodeDiff {
   /** Ids present in the freshly generated world that no longer exist. */

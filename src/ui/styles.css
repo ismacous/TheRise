@@ -723,6 +723,39 @@ body {
   margin-top: 6px;
 }
 
+/*
+ * The village's own name, at the top of the town hall. It is a heading that
+ * happens to be tappable, so it is styled as a heading first: the pencil is
+ * the only thing that says "and you may change this".
+ */
+.village-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 2px 0 6px;
+  background: none;
+  border: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-align: left;
+  cursor: pointer;
+}
+
+.village-name .ic {
+  width: 14px;
+  height: 14px;
+  color: var(--ink-faint);
+  flex: 0 0 auto;
+}
+
+.village-name:active {
+  opacity: 0.65;
+}
+
 .section-title {
   font-size: 11px;
   text-transform: uppercase;

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { computeModifiers } from '../src/sim/modifiers';
 import { computeStats, createNewGame } from '../src/sim/simulation';
 import { ADULT_AGE, createVillager } from '../src/sim/villagers';
 import { INCOME_SOURCES, EXPENSE_SOURCES } from '../src/sim/history';
@@ -132,6 +133,11 @@ describe('the ledger', () => {
   it('books every coin against a source and keeps the curves in step', () => {
     const sim = createNewGame({ seed: 'ledger' });
     const w = sim.world;
+    // Taxes are a study now, so the register has to be opened before there is
+    // anything to book against it.
+    w.research.completed.add('r_taxation');
+    w.modifiers = computeModifiers(w.research.completed);
+    w.taxRate = 0.5;
     const opening = w.treasury;
 
     run(sim, DAY_SECONDS);

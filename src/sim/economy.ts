@@ -232,8 +232,15 @@ export function updateEconomy(world: World, dt: number): void {
   world.taxIncomeWindow += taxes;
 }
 
-/** Coin per second the village collects at its current rate and morale. */
+/**
+ * Coin per second the village collects at its current rate and morale.
+ *
+ * Nothing at all before the tax register is studied: the opening village lives
+ * on its founding purse and on what it sells, which is what makes the first
+ * study a real decision instead of a formality.
+ */
 export function taxIncome(world: World): number {
+  if (!world.modifiers.taxation) return 0;
   const prestige = 1 + (world.stats.tier - 1) * 0.18;
   const morale = 0.5 + world.stats.happiness / 100;
   return (world.stats.adults * TAX_PER_ADULT_PER_DAY * world.taxRate * 2 * morale * prestige) / DAY_SECONDS;
@@ -244,6 +251,9 @@ export function taxIncome(world: World): number {
  * confiscatory rate is the fastest way to empty a village.
  */
 export function taxHappiness(world: World): number {
+  // Before the register exists there is no tax to be glad or sour about, so
+  // the swing is neutral rather than a free gift of good cheer.
+  if (!world.modifiers.taxation) return 0;
   return (0.5 - world.taxRate) * TAX_HAPPINESS_SWING;
 }
 

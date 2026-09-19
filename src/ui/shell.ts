@@ -188,6 +188,11 @@ export class UiShell {
   update(dt: number, frameMs: number, fps: number): void {
     this.refreshTimer -= dt;
     if (this.refreshTimer > 0) return;
+    // How much time has really gone by since the last pass. The timers below
+    // used to subtract `dt` — a single frame — although this body only runs
+    // five times a second, so a "half-second" countdown took six real seconds
+    // and the study timer on the Savoir page looked frozen.
+    const elapsed = 0.2 - this.refreshTimer;
     this.refreshTimer = 0.2;
 
     this.minimap.update();
@@ -205,7 +210,7 @@ export class UiShell {
 
     // Panels that show running values — research timers, caravan ETAs, stocks —
     // redraw on their own so the player never has to close and reopen them.
-    this.liveTimer -= dt;
+    this.liveTimer -= elapsed;
     if (this.liveTimer <= 0) {
       this.liveTimer = 0.5;
       const open = this.api.openSheetId;

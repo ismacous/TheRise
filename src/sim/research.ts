@@ -31,9 +31,10 @@ export function scholarCount(world: World): number {
 export function researchSpeed(world: World): number {
   let speed = 0;
   for (const b of universities(world)) {
-    // An empty hall still ticks over — slowly enough that nobody mistakes it
-    // for a substitute for scholars.
-    let out = 0.35 + 0.55 * b.workers.length;
+    // No scholars, no study. An empty hall used to tick over on its own, which
+    // meant the whole tree could be climbed without ever staffing the place.
+    if (b.workers.length === 0) continue;
+    let out = 0.6 * b.workers.length;
     out *= outputMultiplier(b);
     // Candles let them keep reading after dusk.
     if ((b.inv.candles ?? 0) > 0) out *= 1.35;
@@ -71,6 +72,7 @@ export function canStartResearch(world: World, id: ResearchId): { ok: boolean; r
   if (!def) return { ok: false, reason: 'Inconnu' };
   if (world.research.completed.has(id)) return { ok: false, reason: 'Déjà étudié' };
   if (!hasUniversity(world)) return { ok: false, reason: 'Construisez une université' };
+  if (scholarCount(world) === 0) return { ok: false, reason: 'Affectez un érudit' };
   if (def.tier > unlockedTier(world)) {
     return { ok: false, reason: `Terminez l'ère ${def.tier - 1} d'abord` };
   }
@@ -158,6 +160,11 @@ export function updateResearch(world: World, dt: number): void {
 
   // Richer veins are applied retroactively so the perk feels immediate.
   for (const e of def.effects) {
+    if (e.kind === 'taxation') {
+      // Opening the register at zero per cent would leave the player staring
+      // at an empty treasury wondering what they just paid for.
+      world.taxRate = 0.5;
+    }
     if (e.kind === 'deposit_richness') {
       for (const n of world.nodes.values()) {
         if (n.kind === 'coal_vein' || n.kind === 'iron_vein' || n.kind === 'gold_vein') {

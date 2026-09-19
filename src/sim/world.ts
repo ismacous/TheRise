@@ -10,6 +10,7 @@ import { computeModifiers, type Modifiers } from './modifiers';
 import {
   gatherRadius,
   housingCapacity,
+  MAX_IN_PLACE_LEVEL,
   maxLevelOf,
   serviceRadius,
   storageCapacity,
@@ -122,7 +123,11 @@ export class World {
    * neutral setting: above it people grumble, below it they are cheerful and
    * the treasury empty.
    */
-  taxRate = 0.5;
+  /**
+   * Tax rate. Zero until `r_taxation` is studied — see `taxIncome`. The
+   * study sets it to a sensible middle when it lands.
+   */
+  taxRate = 0;
   /** Comfort goods consumed by households, decays over time into happiness. */
   comfortPool = 0;
   /** Extra food consumption multiplier from active events. */
@@ -367,7 +372,7 @@ export class World {
   /** Brings every linked building up to `level`, free of charge. */
   raiseLinked(b: Building, level: number): void {
     for (const other of this.linkedBuildings(b)) {
-      const capped = Math.min(maxLevelOf(other.def), level);
+      const capped = Math.min(maxLevelOf(other.def, this.modifiers.buildingLevel), level);
       if (other.level >= capped) continue;
       other.level = capped;
       this.notify(
@@ -516,8 +521,16 @@ export class World {
 
   /** Can the player start improving this building right now? */
   canUpgrade(b: Building): PlacementCheck {
-    const target = upgradeTargetOf(b);
-    if (!target) return { ok: false, reason: 'Niveau maximal atteint' };
+    const target = upgradeTargetOf(b, this.modifiers.buildingLevel);
+    if (!target) {
+      // Being stopped by the tree and being finished are different answers,
+      // and the player deserves to be told which one they are looking at.
+      const ceiling = maxLevelOf(b.def, this.modifiers.buildingLevel);
+      if (b.level >= ceiling && ceiling < MAX_IN_PLACE_LEVEL && !BUILDINGS[b.def].upgradesTo) {
+        return { ok: false, reason: 'Étude manquante' };
+      }
+      return { ok: false, reason: 'Niveau maximal atteint' };
+    }
     if (b.state !== 'active') return { ok: false, reason: 'Bâtiment non actif' };
     if (b.upgrade) return { ok: false, reason: 'Travaux déjà en cours' };
     if (target.toDef) {
@@ -551,7 +564,7 @@ export class World {
     const b = this.buildings.get(id);
     if (!b) return false;
     if (!this.canUpgrade(b).ok) return false;
-    const target = upgradeTargetOf(b)!;
+    const target = upgradeTargetOf(b, this.modifiers.buildingLevel)!;
     this.spend(target.goldCost, 'upgrade');
     for (const [g, amount] of Object.entries(target.cost)) {
       this.takeFromStock(g as GoodId, amount as number);

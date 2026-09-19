@@ -463,6 +463,34 @@ function make(defId: BuildingId, state: BuildingState, lv: number, stage = 0): B
       b.boxOn(W / 2 - 0.7, 0.25, chairZ - 0.12, 0.3, 0.3, 0.04, C.wallWood);
       addTradeSign(b, W, D, C.wallWood, 'square', workshopFront(D) + 0.06);
       break;
+    case 'builders_yard': {
+      out.height = buildWorkshop(b, W, D, C.wallWood, C.roofThatch, out, lv);
+      // The yard is the building: a scaffold, timber, stone and a barrow.
+      // A carpenter's shop makes chairs; this one makes the village, so what
+      // reads at play distance has to be the scaffolding, not the lodge.
+      const yz = yardZ(D);
+      const sx0 = -W / 2 + 0.75;
+      for (const sx of [0, 0.62]) {
+        for (const sz of [-0.2, 0.2]) {
+          b.boxOn(sx0 + sx, 0, yz + sz, 0.07, 1.15 + (lv - 1) * 0.2, 0.07, C.scaffold);
+        }
+      }
+      for (let i = 1; i <= (lv >= 2 ? 2 : 1); i++) {
+        const h = i * (0.55 + (lv - 1) * 0.1);
+        b.box(sx0 + 0.31, h, yz, 0.78, 0.06, 0.5, C.wallWood);
+        b.box(sx0 + 0.31, h + 0.02, yz - 0.25, 0.78, 0.04, 0.04, C.frame);
+      }
+      // A ladder leaning on the scaffold.
+      b.box(sx0 + 0.75, 0.6, yz + 0.3, 0.05, 1.3, 0.05, C.scaffold, 0, 0.22, 0);
+      addPlankStack(b, W / 2 - 0.75, yz + 0.2, 4, 0.25);
+      addSawhorse(b, W / 2 - 0.85, yz - 0.5);
+      // Dressed stone waiting to go up.
+      for (let i = 0; i < 3; i++) {
+        b.boxOn(-W / 2 + 0.6 + (i % 2) * 0.3, (i > 1 ? 0.22 : 0), yz - 0.75, 0.28, 0.22, 0.28, C.wallStone);
+      }
+      addTradeSign(b, W, D, C.beam, 'wedge', workshopFront(D) + 0.06);
+      break;
+    }
     case 'fletcher':
       out.height = buildWorkshop(b, W, D, C.wallWood, C.roofThatch, out, lv);
       addWorkbench(b, -W / 2 + 0.7, yardZ(D));

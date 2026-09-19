@@ -17,7 +17,11 @@ export type ResearchEffect =
   | { kind: 'fire_risk'; mul: number }
   | { kind: 'disease_resist'; mul: number }
   | { kind: 'build_speed'; mul: number }
-  | { kind: 'storage'; mul: number };
+  | { kind: 'storage'; mul: number }
+  /** Opens the tax register. Before it, the village is not taxed at all. */
+  | { kind: 'taxation' }
+  /** Raises the ceiling on in-place building levels. */
+  | { kind: 'building_level'; value: number };
 
 export interface ResearchDef {
   id: ResearchId;
@@ -47,6 +51,7 @@ export type ResearchId =
   | 'r_fishing'
   | 'r_quarrying'
   | 'r_paths'
+  | 'r_taxation'
   | 'r_cottages'
   | 'r_marketplace'
   // ── Era 2 : le pain quotidien ─────────────────────────────────────────
@@ -58,6 +63,7 @@ export type ResearchId =
   | 'r_husbandry_fowl'
   | 'r_lumber_camp'
   | 'r_village_adornment'
+  | 'r_master_builders'
   // ── Era 3 : métiers et échanges ───────────────────────────────────────
   | 'r_weaving'
   | 'r_tanning'
@@ -80,6 +86,7 @@ export type ResearchId =
   | 'r_firewatch'
   | 'r_herbalism'
   | 'r_civic_pride'
+  | 'r_grand_works'
   // ── Era 5 : la cité ───────────────────────────────────────────────────
   | 'r_gold_prospecting'
   | 'r_goldsmithing'
@@ -158,6 +165,18 @@ export const RESEARCH: Record<ResearchId, ResearchDef> = {
     unlocks: ['dirt_path'],
     effects: [],
     desc: 'Tracez des chemins : un tiers de vitesse en plus pour tous ceux qui les empruntent.',
+  }),
+  r_taxation: r({
+    id: 'r_taxation',
+    name: 'Registre et dîme',
+    branch: 'city',
+    tier: 1,
+    icon: 'coin',
+    cost: 50,
+    duration: 65,
+    unlocks: [],
+    effects: [{ kind: 'taxation' }],
+    desc: "Un registre, une balance et quelqu'un pour tenir les comptes. Tant qu'il n'existe pas, personne ne paie rien : le trésor ne grossit que par le commerce.",
   }),
   r_cottages: r({
     id: 'r_cottages',
@@ -284,6 +303,19 @@ export const RESEARCH: Record<ResearchId, ResearchDef> = {
     unlocks: ['flower_bed', 'bench', 'village_green'],
     effects: [{ kind: 'happiness', add: 1 }],
     desc: "Des fleurs, un banc, un tilleul sur la place : le bonheur d'un villageois est la somme de ce qui l'entoure, et c'est ce que ça coûte le moins cher à améliorer.",
+  }),
+
+  r_master_builders: r({
+    id: 'r_master_builders',
+    name: 'Maîtres bâtisseurs',
+    branch: 'craft',
+    tier: 2,
+    icon: 'hammer',
+    cost: 190,
+    duration: 140,
+    unlocks: ['builders_yard'],
+    effects: [{ kind: 'building_level', value: 2 }],
+    desc: "Une loge, des équerres, et des gens dont le métier est de bâtir. Ouvre le niveau II de tous les bâtiments, et la loge des charpentiers qui les montera sans vider vos ateliers.",
   }),
 
   // ══ Era 3 ═══════════════════════════════════════════════════════════════
@@ -532,6 +564,22 @@ export const RESEARCH: Record<ResearchId, ResearchDef> = {
     unlocks: ['lamp_post', 'fountain', 'statue', 'theatre'],
     effects: [{ kind: 'happiness', add: 2 }],
     desc: 'Une fontaine, des lampadaires, une statue et des comédiens sur des tréteaux. Ce qui sépare un gros bourg d’une ville où l’on a envie de vivre.',
+  }),
+
+  r_grand_works: r({
+    id: 'r_grand_works',
+    name: 'Grands travaux',
+    branch: 'craft',
+    tier: 4,
+    icon: 'anvil',
+    cost: 900,
+    duration: 280,
+    unlocks: [],
+    effects: [
+      { kind: 'building_level', value: 3 },
+      { kind: 'build_speed', mul: 1.15 },
+    ],
+    desc: "Charpentes à deux étages, fondations profondes, échafaudages qui tiennent. Ouvre le niveau III : le dernier cran, et le plus cher.",
   }),
 
   // ══ Era 5 ═══════════════════════════════════════════════════════════════

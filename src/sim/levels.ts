@@ -19,8 +19,15 @@ const OUTPUT_PER_LEVEL = 0.35;
 /** Working-radius multiplier granted per in-place level. */
 const RADIUS_PER_LEVEL = 0.18;
 
-export function maxLevelOf(defId: BuildingId): number {
-  return BUILDINGS[defId].upgradesTo ? 1 : MAX_IN_PLACE_LEVEL;
+/**
+ * Highest level this building may reach.
+ *
+ * `cap` is the ceiling the research tree currently allows. It starts at 1:
+ * improving anything at all is something the player studies for, rather than
+ * a button that has always been there.
+ */
+export function maxLevelOf(defId: BuildingId, cap = MAX_IN_PLACE_LEVEL): number {
+  return BUILDINGS[defId].upgradesTo ? 1 : Math.min(MAX_IN_PLACE_LEVEL, Math.max(1, cap));
 }
 
 /** Worker slots this building currently offers. */
@@ -62,6 +69,7 @@ export function collectRadius(b: Building): number {
 export function storageCapacity(b: Building): number {
   const def = BUILDINGS[b.def];
   if (!def.storage) return 0;
+  if (def.storage.fixed) return def.storage.capacity;
   return Math.floor(def.storage.capacity * (1 + (b.level - 1) * 0.5));
 }
 
@@ -81,8 +89,12 @@ export interface UpgradeTarget {
   work: number;
 }
 
-/** What improving this building would produce, or null when it is maxed out. */
-export function upgradeTargetOf(b: Building): UpgradeTarget | null {
+/**
+ * What improving this building would produce, or null when it cannot be
+ * improved — either because it is maxed out or because `cap`, the ceiling the
+ * research tree allows, has not been raised that far yet.
+ */
+export function upgradeTargetOf(b: Building, cap = MAX_IN_PLACE_LEVEL): UpgradeTarget | null {
   const def = BUILDINGS[b.def];
   if (def.upgradesTo) {
     const next = BUILDINGS[def.upgradesTo];
@@ -95,7 +107,7 @@ export function upgradeTargetOf(b: Building): UpgradeTarget | null {
       work: Math.max(30, next.buildWork * 0.7),
     };
   }
-  if (b.level >= MAX_IN_PLACE_LEVEL) return null;
+  if (b.level >= maxLevelOf(b.def, cap)) return null;
   const level = b.level + 1;
   // An in-place level costs a growing share of the original build.
   const scale = 0.7 + (level - 2) * 0.5;

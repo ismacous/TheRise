@@ -46,6 +46,7 @@ export type IconName =
   | 'arrive'
   | 'save'
   | 'flag'
+  | 'pencil'
   | 'bell'
   // places and work
   | 'home'
@@ -117,6 +118,7 @@ const SHAPES: Record<IconName, string> = {
   leave: '<path d="M13.5 4H6a1.5 1.5 0 0 0-1.5 1.5v13A1.5 1.5 0 0 0 6 20h7.5"/><path d="M16 8.5l3.5 3.5L16 15.5"/><path d="M19 12h-9"/>',
   arrive: '<path d="M10.5 4H18a1.5 1.5 0 0 1 1.5 1.5v13A1.5 1.5 0 0 1 18 20h-7.5"/><path d="M8 8.5L4.5 12 8 15.5"/><path d="M5 12h9"/>',
   save: '<path d="M5 4h11l3 3v13H5z"/><path d="M8.5 4v5h7V4"/><path d="M8.5 20v-6h7v6"/>',
+  pencil: '<path d="M4 20h4L20 8l-4-4L4 16z"/><path d="M14 6l4 4"/>',
   flag: '<path d="M6 21V4"/><path d="M6 5h11l-2 3.5L17 12H6z"/>',
   bell: '<path d="M12 4a5.5 5.5 0 0 1 5.5 5.5c0 4 1.5 5.5 1.5 5.5H5s1.5-1.5 1.5-5.5A5.5 5.5 0 0 1 12 4z"/><path d="M10 18a2 2 0 0 0 4 0"/>',
 

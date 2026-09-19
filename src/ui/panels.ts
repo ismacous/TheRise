@@ -35,6 +35,7 @@ import {
   collectRadius,
   displayName,
   gatherRadius,
+  MAX_IN_PLACE_LEVEL,
   housingCapacity,
   outputMultiplier,
   serviceRadius,
@@ -1469,8 +1470,15 @@ function renderTreasury(api: GameApi, body: HTMLElement, refresh: Refresh): void
   const perMinute = taxIncome(w) * 60;
   const swing = taxHappiness(w);
 
-  body.append(el('div', { class: 'section-title', text: 'Le village' }));
-  const rename = el('button', { class: 'btn grow', text: `Renommer « ${w.villageName} »` });
+  // The village's own name, as a name. It used to be the label of a button
+  // that said "Renommer « X »", so the one thing the panel was for — telling
+  // you where you are — was buried in an instruction.
+  const name = el('button', { class: 'village-name', title: 'Toucher pour renommer' }, [
+    el('span', { text: w.villageName }),
+    icon('pencil', 'ic'),
+  ]);
+  body.append(name);
+  const rename = name;
   onTap(rename, () => {
     void askText({
       title: 'Nom du village',
@@ -1487,7 +1495,19 @@ function renderTreasury(api: GameApi, body: HTMLElement, refresh: Refresh): void
       refresh();
     });
   });
-  body.append(el('div', { class: 'btn-row' }, [rename]));
+  // Taxes are a study. Until it is done there is no register, no rate and no
+  // slider — showing a disabled one would only raise the question.
+  if (!w.modifiers.taxation) {
+    body.append(
+      el('div', { class: 'section-title', text: 'Impôts' }),
+      el('div', {
+        class: 'card-desc',
+        text: "Personne ne lève l'impôt ici. Étudiez « Registre et dîme » pour ouvrir un registre — d'ici là, le trésor ne grossit que par le commerce.",
+      }),
+      el('div', { class: 'research-status' }, [statChip('Trésor', `${Math.round(w.treasury)}`)]),
+    );
+    return;
+  }
 
   body.append(el('div', { class: 'section-title', text: 'Impôts' }));
   body.append(
@@ -1730,7 +1750,19 @@ function renderBuilding(api: GameApi, body: HTMLElement, refresh: Refresh): void
   const actions = el('div', { class: 'btn-row' });
 
   if (b.state === 'active' && !b.upgrade) {
-    const target = upgradeTargetOf(b);
+    const target = upgradeTargetOf(b, w.modifiers.buildingLevel);
+    if (!target && b.level < MAX_IN_PLACE_LEVEL && !BUILDINGS[b.def].upgradesTo) {
+      body.append(
+        el('div', { class: 'section-title', text: 'Amélioration' }),
+        el('div', {
+          class: 'card-desc',
+          text:
+            b.level === 1
+              ? "Étudiez « Maîtres bâtisseurs » pour ouvrir le niveau II."
+              : "Étudiez « Grands travaux » pour ouvrir le niveau III.",
+        }),
+      );
+    }
     if (target) {
       const check = w.canUpgrade(b);
       const btn = el('button', {
