@@ -41,10 +41,33 @@ export const QUALITY_PRESETS: Record<'low' | 'medium' | 'high', RenderQuality> =
 
 /** Three's physical lighting units, relative to the pre-r155 behaviour. */
 const LIGHT_SCALE = Math.PI;
+/** Bounce colour off the ground by day; see `NIGHT_HEMI_GROUND` for the rest. */
+const HEMI_GROUND = new Color(0x5a6a4a).convertSRGBToLinear();
 
-const NIGHT_SKY = new Color('#12203a').convertSRGBToLinear();
+const NIGHT_SKY = new Color('#1b2f55').convertSRGBToLinear();
 const DUSK_SKY = new Color('#e4926a').convertSRGBToLinear();
-const NIGHT_AMBIENT = new Color('#2f4468').convertSRGBToLinear();
+/**
+ * Night is a blue veil, not an absence of light.
+ *
+ * These are all *pale* blues, and deliberately so. A saturated blue light
+ * multiplies every albedo that is not blue down to nothing: the first attempt
+ * lit the lake beautifully and turned the grass, the roofs and the villagers
+ * into a single black smear. What reads as moonlight is a nearly white light
+ * with a blue lean, over a deep blue sky and fog — the veil comes from the
+ * background and the haze, not from starving the scene of red and green.
+ *
+ * The honest version — sun at a tenth, ambient barely above black — was
+ * unplayable: half the day you could not see your own village, and there is
+ * nothing in a game about carrying planks about that rewards squinting. So
+ * the night here is the one from a painting rather than the one outside: a
+ * deep blue wash over everything, bright enough to read the map by, with the
+ * lit windows standing out warm against it. Nobody mistakes it for day.
+ */
+const NIGHT_AMBIENT = new Color('#8fabe0').convertSRGBToLinear();
+/** The moon is a cold light, and reading as *cold* is what sells the hour. */
+const MOONLIGHT = new Color('#c0d3f4').convertSRGBToLinear();
+const NIGHT_HEMI_SKY = new Color('#88a2cf').convertSRGBToLinear();
+const NIGHT_HEMI_GROUND = new Color('#4b5a75').convertSRGBToLinear();
 
 /** Owns the Three.js scene and every sub-renderer. */
 export class GameRenderer {
@@ -253,23 +276,34 @@ export class GameRenderer {
 
     // Dusk tint near sunrise and sunset.
     const dusk = clamp01(1 - Math.abs(daylight - 0.35) * 3.2) * clamp01(daylight * 3);
-    const sunColor = p.sunColor.clone().lerp(DUSK_SKY, dusk * 0.7);
+    const night = 1 - daylight;
+    const sunColor = p.sunColor.clone().lerp(DUSK_SKY, dusk * 0.7).lerp(MOONLIGHT, night);
     this.sun.color.copy(sunColor);
-    this.sun.intensity = lerp(0.10, 1.55, daylight) * LIGHT_SCALE;
+    // The moon still casts: without a directional at night the roofs lose
+    // their edges and the village turns into a flat stain.
+    this.sun.intensity = lerp(0.40, 1.55, daylight) * LIGHT_SCALE;
 
     const rainDim = 1 - this.world.wetness * 0.35;
-    this.hemi.intensity = lerp(0.22, 0.6, daylight) * rainDim * LIGHT_SCALE;
-    this.ambient.intensity = lerp(0.26, 0.42, daylight) * rainDim * LIGHT_SCALE;
-    this.ambient.color.copy(p.ambient).lerp(NIGHT_AMBIENT, 1 - daylight);
+    this.hemi.intensity = lerp(0.5, 0.6, daylight) * rainDim * LIGHT_SCALE;
+    this.hemi.color.copy(p.sky).lerp(NIGHT_HEMI_SKY, night);
+    this.hemi.groundColor.copy(HEMI_GROUND).lerp(NIGHT_HEMI_GROUND, night);
+    this.ambient.intensity = lerp(0.58, 0.42, daylight) * rainDim * LIGHT_SCALE;
+    this.ambient.color.copy(p.ambient).lerp(NIGHT_AMBIENT, night);
 
     const sky = (this.scene.background as Color) ?? new Color();
-    sky.copy(p.sky).lerp(DUSK_SKY, dusk * 0.55).lerp(NIGHT_SKY, 1 - daylight);
+    sky.copy(p.sky).lerp(DUSK_SKY, dusk * 0.55).lerp(NIGHT_SKY, night);
     const stormDim = this.world.weather === 'storm' ? 0.65 : this.world.weather === 'rain' ? 0.82 : 1;
     sky.multiplyScalar(stormDim);
     this.scene.background = sky;
 
     this.fog.color.copy(sky);
-    const fogStrength = this.world.weather === 'fog' ? 0.45 : this.world.wetness * 0.25;
+    // The veil itself. Distance washing out to the night sky is what makes an
+    // evenly lit village read as nocturnal without taking light off it, and
+    // it is much kinder than simply turning everything down.
+    const fogStrength = Math.max(
+      this.world.weather === 'fog' ? 0.45 : this.world.wetness * 0.25,
+      night * 0.5,
+    );
     this.fog.near = lerp(this.controls.distance * 1.6, this.controls.distance * 0.7, fogStrength);
     this.fog.far = lerp(this.controls.distance * 5.5, this.controls.distance * 2.4, fogStrength);
   }
